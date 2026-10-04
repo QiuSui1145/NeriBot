@@ -32,6 +32,18 @@ class TestReasoningFilter(unittest.TestCase):
             "其他人对此表示赞叹或提及燃尽感。作为音理，我需要以普通群友的身份自然地插话参与，进行一句简短可爱的吐槽或接话，"
             "不能叫哥哥，语气要元气开朗。我可以夸赞这个建筑还原得很棒，或者顺着 MaoyuQWQ 说的'建完燃尽'来一句调侃。"
         )
+        # 真实线上最新英文分析泄漏样本 (2026-10-04 21:47:34)
+        self.incident_sample_latest = (
+            "The user  is sending a series of fragmented messages in a group chat context.\n"
+            "The messages seem to be discussing technical details about memory systems , possibly related to an AI/LLM architecture or a specific project they are working on.\n"
+            "Then there are image sends .\n"
+            "Then \"现在几点了\" .\n"
+            "Then \"上游炸了\" .\n"
+            "Then \"你现在知道我为啥没太多时间了吧\" .\n"
+            "Then \"。。。\" \"不是我说\" \"在吗\" .\n\n"
+            "The system prompt establishes I am Neri , his \"sister\" .\n"
+            "Current real time: 2026"
+        )
 
     def test_strip_thinking_tags(self):
         # 闭合 think 标签
@@ -51,9 +63,16 @@ class TestReasoningFilter(unittest.TestCase):
         self.assertEqual(tts_client.strip_thinking_and_analysis(raw4), "[TEXT]哥哥快去休息！[/TEXT]")
 
     def test_incident_sample_detection(self):
-        # 必须能够准确识别出 ID 1734 与 ID 2166 的分析思路泄露
+        # 必须能够准确识别出 ID 1734、ID 2166 以及最新的英文分析泄漏样本
         self.assertTrue(tts_client.is_pure_reasoning_or_analysis(self.incident_sample_1734))
         self.assertTrue(tts_client.is_pure_reasoning_or_analysis(self.incident_sample_2166))
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis(self.incident_sample_latest))
+
+        # 纯标点、纯省略号必须判定为无效/分析内容
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis("..."))
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis("。。。"))
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis("……"))
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis(""))
 
         # 变体分析思路
         self.assertTrue(tts_client.is_pure_reasoning_or_analysis("让我分析一下群友在聊什么。从上下文来看，大家都在讨论宵夜。"))
@@ -75,6 +94,10 @@ class TestReasoningFilter(unittest.TestCase):
         disp2, voice2 = tts_client.parse_dual_track(self.incident_sample_2166)
         self.assertEqual(disp2, "")
         self.assertEqual(voice2, "")
+
+        disp_latest, voice_latest = tts_client.parse_dual_track(self.incident_sample_latest)
+        self.assertEqual(disp_latest, "")
+        self.assertEqual(voice_latest, "")
 
         # 前置分析 + 正式标签 -> 必须丢弃所有前置分析，只提取标签内台词
         mixed_sample = (
@@ -338,6 +361,80 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(user_msgs[0].content, "这个新游戏太好玩了")
         self.assertEqual(len(assistant_msgs), 1)
         self.assertIn("大家在聊什么游戏呀", assistant_msgs[0].content)
+
+    async def test_user_chat_ellipsis_triggers_fallback(self):
+        # 测试当 LLM 回复纯省略号 "..." 或 "[TEXT]...[/TEXT]" 时，系统安全拦截并回退为元气走神台词
+        test_group = 1050415927
+        test_user = 1198728532
+        sess = context_manager.get_session("group", test_group)
+        sess.clear()
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        event = {
+            "post_type": "message",
+            "message_type": "group",
+            "sub_type": "normal",
+            "message_id": 66666,
+            "group_id": test_group,
+            "user_id": test_user,
+            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "raw_message": "音理，现在几点了",
+            "message": "音理，现在几点了",
+        }
+
+        # 模拟返回纯省略号
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=("...", {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        self.assertEqual(len(dispatched_messages), 1)
+        self.assertEqual(dispatched_messages[0][1].get("display_text"), "诶？音理刚才走神了一下下……")
+
+    async def test_user_chat_latest_english_reasoning_triggers_fallback(self):
+        # 测试当 LLM 回复最新英文分析泄漏文本时，系统安全拦截并回退为元气走神台词
+        test_group = 1050415927
+        test_user = 1198728532
+        sess = context_manager.get_session("group", test_group)
+        sess.clear()
+
+        sample_english_reasoning = (
+            "The user  is sending a series of fragmented messages in a group chat context.\n"
+            "The messages seem to be discussing technical details about memory systems , possibly related to an AI/LLM architecture or a specific project they are working on.\n"
+            "Then there are image sends .\n"
+            "Then \"现在几点了\" .\n"
+            "Then \"上游炸了\" .\n"
+            "Then \"你现在知道我为啥没太多时间了吧\" .\n"
+            "Then \"。。。\" \"不是我说\" \"在吗\" .\n\n"
+            "The system prompt establishes I am Neri , his \"sister\" .\n"
+            "Current real time: 2026"
+        )
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        event = {
+            "post_type": "message",
+            "message_type": "group",
+            "sub_type": "normal",
+            "message_id": 55555,
+            "group_id": test_group,
+            "user_id": test_user,
+            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "raw_message": "音理在吗",
+            "message": "音理在吗",
+        }
+
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(sample_english_reasoning, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        self.assertEqual(len(dispatched_messages), 1)
+        self.assertEqual(dispatched_messages[0][1].get("display_text"), "诶？音理刚才走神了一下下……")
+        self.assertNotIn("The user", dispatched_messages[0][1].get("display_text", ""))
 
 
 if __name__ == "__main__":

@@ -39,12 +39,17 @@ REASONING_PATTERNS = [
     r"可以(?:夸赞|吐槽|回复|调侃)",
     r"Thinking Process",
     r"Thought Process",
-    r"The user (?:is|sent|shared|mentioned)",
+    r"The user\s+(?:is|sent|shared|mentioned|said|wants|asked)",
+    r"The messages?\s+(?:seem|are|show|appear|indicate)",
+    r"The system prompt\s+(?:establishes|says|indicates|specifies)",
+    r"Current real time\s*:",
+    r"(?:in a|from the)\s+group chat context",
+    r"fragmented messages?",
     r"As (?:Kazemata\s+)?Neri",
     r"I need to",
-    r"Response strategy:",
-    r"Constraints:",
-    r"Key points:",
+    r"Response strategy\s*:",
+    r"Constraints\s*:",
+    r"Key points\s*:",
 ]
 
 
@@ -77,8 +82,20 @@ class TTSClient:
     def is_pure_reasoning_or_analysis(text: str) -> bool:
         """检测一段文本是否实质上是大模型的推理分析思路，而非角色真实对白。"""
         if not text or not text.strip():
-            return False
+            return True
         t = text.strip()
+
+        # 1. 纯标点、纯空格或省略号（如 "...", "。。。", "……"）绝非合法有效对白
+        if not t.strip(" .。…，,！!？?~～-_"):
+            return True
+
+        # 2. 若全文无任何中文字符且无假名，同时包含了典型的对话分析英文词汇（user/prompt/messages/context/system 等），必定为元分析泄露
+        has_cjk = bool(re.search(r"[\u4e00-\u9fff\u3040-\u30ff]", t))
+        if not has_cjk and len(t) > 20:
+            if re.search(r"\b(user|prompt|messages?|context|system|chat|reply|response|session|fragmented)\b", t, re.IGNORECASE):
+                return True
+
+        # 3. 统计特征分析词频
         score = 0
         for pat in REASONING_PATTERNS:
             if re.search(pat, t, re.IGNORECASE):

@@ -425,10 +425,10 @@ class BotService:
         except Exception as e:
             print(f"[MemoryDriver] 召回失败: {e}")
 
-        llm_messages = sess.get_llm_messages(system_prompt, supports_vision=supports_vision)
-        
         from src.prompting import get_tts_anchor_rules
-        llm_messages.append({"role": "system", "content": get_tts_anchor_rules()})
+        system_prompt += "\n\n" + get_tts_anchor_rules()
+
+        llm_messages = sess.get_llm_messages(system_prompt, supports_vision=supports_vision)
 
         if is_active_reply:
             llm_messages.append({
@@ -445,6 +445,8 @@ class BotService:
         # 获取可用 Agentic 技能工具 Schema
         tools = plugin_manager.get_active_tools_schema(is_admin=is_admin)
 
+        max_tokens_override = 500 if (is_simultaneous or is_active_reply) else None
+
         try:
             raw_reply, usage = await llm_client.chat_completion(
                 messages=llm_messages,
@@ -453,16 +455,21 @@ class BotService:
                 user_id=user_id,
                 is_decision=False,
                 model_tag=model_tag,
-                max_tokens_override=450 if is_active_reply else None,
+                max_tokens_override=max_tokens_override,
                 tools=tools if tools else None,
             )
 
-            # 严格红线检查 1：主动回复模式下，若模型输出没有包含 [TEXT]，说明大模型极大概率在写推演分析，绝对禁止发送，直接静默放弃！
-            if is_active_reply and "[TEXT]" not in raw_reply.upper():
-                print(f"[BotService 绝对红线拦截] 主动回复输出未包含 [TEXT] 对白标签，判定为思考推演或无效格式，立即静默丢弃: {raw_reply[:100]}...")
-                sess.add_message("planner", "执行终止 | 主动回复生成内容未遵循[TEXT]标签规范，判定为分析思路外泄，已静默拦截", user_name="Planner")
-                context_manager.save()
-                return
+            print(f"[LLM Response] len={len(raw_reply)} tokens={usage.get('completion_tokens', 0)} raw: {repr(raw_reply[:160])}")
+
+            # 严格红线检查 1：双轨同传模式下，若模型输出没有包含 [TEXT]，说明大模型极大概率在写推演分析，绝对禁止裸发！
+            if is_simultaneous and "[TEXT]" not in raw_reply.upper():
+                print(f"[BotService 绝对红线拦截] 双轨模式下缺少 [TEXT] 对白标签，判定为思考推演或异常格式，已拦截: {raw_reply[:100]}...")
+                if is_active_reply:
+                    sess.add_message("planner", "执行终止 | 主动回复生成内容未遵循[TEXT]标签规范，判定为分析思路外泄，已静默拦截", user_name="Planner")
+                    context_manager.save()
+                    return
+                else:
+                    raw_reply = "[TEXT]诶？音理刚才走神了一下下……[/TEXT][VOICE]あれ？ちょっとぼーっとしてた……[/VOICE]"
 
             # 多轮工具调用执行闭环 (Tool Loop)
             max_tool_turns = 3
@@ -515,7 +522,7 @@ class BotService:
                     user_id=user_id,
                     is_decision=False,
                     model_tag=model_tag,
-                    max_tokens_override=450 if is_active_reply else None,
+                    max_tokens_override=max_tokens_override,
                     tools=tools if tools else None,
                 )
         except Exception as e:
@@ -539,9 +546,12 @@ class BotService:
         # 管道后置 Hook (回复过滤与修饰)
         display_text = await plugin_manager.hook_after_chat(sess_cfg.session_id, display_text)
 
-        # 安全防御检测：如果输出为分析思路、思维链或空内容，触发安全拦截
-        if not display_text.strip() or tts_client.is_pure_reasoning_or_analysis(display_text):
-            print(f"[BotService 拦截] 识别到生成回复为思维链路/分析思路或空内容: {display_text[:80]}...")
+        # 安全防御检测：如果输出为分析思路、思维链、纯符号/省略号或空内容，触发安全拦截
+        has_substantive = bool(display_text and display_text.strip(" .。…，,！!？?~～-_"))
+        is_invalid = (not has_substantive) or tts_client.is_pure_reasoning_or_analysis(display_text)
+
+        if is_invalid:
+            print(f"[BotService 拦截] 识别到生成回复为思维链路/纯符号或无效内容: {display_text[:80]}...")
             if is_active_reply:
                 # 主动回复若未生成有效对白台词，静默放弃，绝不向群聊发送分析文本
                 sess.add_message("planner", "执行终止 | 主动回复生成内容判定为思维链泄露或无效对白，已静默拦截", user_name="Planner")

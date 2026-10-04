@@ -19,7 +19,7 @@ class LLMConfig(BaseModel):
     api_key: str = Field(default="", description="API 密钥")
     model: str = Field(default="gpt-4o-mini", description="主聊天模型名称")
     temperature: float = Field(default=0.7, description="采样温度")
-    max_tokens: int = Field(default=200, description="单次最大输出Token数")
+    max_tokens: int = Field(default=500, description="单次最大输出Token数")
     top_p: float = Field(default=1.0, description="Top-P 采样阈值")
     max_retries: int = Field(default=3, description="LLM 错误重试次数")
 

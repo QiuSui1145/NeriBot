@@ -28,15 +28,19 @@ class MessageItem:
         self.images: List[str] = images or []
 
     def to_dict(self, supports_vision: bool = False) -> dict:
-        """根据模型是否支持识图组装消息体。"""
+        """根据模型是否支持识图组装消息体。在多人聊天场景下呈现说话人昵称，避免模型将多方对话混淆。"""
+        text = self.content
+        if self.role == "user" and self.user_name and not text.startswith(f"{self.user_name}:"):
+            text = f"{self.user_name}: {text}"
+
         if supports_vision and self.images and self.role == "user":
             content_parts = []
-            if self.content:
-                content_parts.append({"type": "text", "text": self.content})
+            if text:
+                content_parts.append({"type": "text", "text": text})
             for img_url in self.images:
                 content_parts.append({"type": "image_url", "image_url": {"url": img_url}})
             return {"role": self.role, "content": content_parts}
-        return {"role": self.role, "content": self.content}
+        return {"role": self.role, "content": text}
 
     def serialize(self) -> dict:
         return {
