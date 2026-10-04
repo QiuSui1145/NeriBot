@@ -4,7 +4,7 @@
     "api_key": "",
     "model": "gpt-4o-mini",
     "temperature": 0.7,
-    "max_tokens": 500,
+    "max_tokens": 1200,
     "top_p": 1.0,
     "max_retries": 3
   },
@@ -33,7 +33,7 @@
       "model_name": "gpt-4o-mini",
       "display_name": "gpt-4o-mini (默认主模型)",
       "temperature": 0.7,
-      "max_tokens": 500,
+      "max_tokens": 1200,
       "context_limit": 12,
       "supports_vision": true,
       "supports_audio": false,

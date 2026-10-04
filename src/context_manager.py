@@ -241,10 +241,31 @@ class SessionContext:
                 "role": "system",
                 "content": f"【前期重要记忆摘要】：{branch.rolling_summary}",
             })
+        merged_history: List[dict] = []
         for msg in branch.history:
             if msg.role not in ["user", "assistant", "system"]:
                 continue
-            messages.append(msg.to_dict(supports_vision=supports_vision))
+            item = msg.to_dict(supports_vision=supports_vision)
+            # 合并连续的 user 消息轮次，使提示词契合大模型标准交替对话分布，杜绝连续user触发分析模式
+            if merged_history and merged_history[-1]["role"] == "user" and item["role"] == "user":
+                prev = merged_history[-1]
+                prev_c = prev.get("content")
+                curr_c = item.get("content")
+                if isinstance(prev_c, str) and isinstance(curr_c, str):
+                    prev["content"] = prev_c + "\n" + curr_c
+                    continue
+                elif isinstance(prev_c, list) and isinstance(curr_c, list):
+                    prev["content"] = prev_c + curr_c
+                    continue
+                elif isinstance(prev_c, list) and isinstance(curr_c, str):
+                    prev["content"].append({"type": "text", "text": curr_c})
+                    continue
+                elif isinstance(prev_c, str) and isinstance(curr_c, list):
+                    prev["content"] = [{"type": "text", "text": prev_c}] + curr_c
+                    continue
+            merged_history.append(item)
+
+        messages.extend(merged_history)
         return messages
 
     def serialize(self) -> dict:

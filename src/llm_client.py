@@ -2,6 +2,7 @@
 支持按会话路由至不同供应商、自动解析多模态能力（识图/音频/视频）、Token核算与低延迟异步通信。
 """
 
+import asyncio
 import time
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -184,6 +185,9 @@ class LLMClient:
 
         temp = temperature_override if temperature_override is not None else default_temp
         max_tokens = max_tokens_override if max_tokens_override is not None else default_max_tokens
+        # 对于正常对话生成（非决策模式），为保障双轨同传、多模态及思考型模型的完整输出，max_tokens 安全保底为 1000
+        if not is_decision and (not max_tokens or max_tokens < 600):
+            max_tokens = 1000
 
         # 如果模型不支持识图，安全扁平化多模态结构为纯字符串，防止上游 400 报错
         cleaned_messages = []
@@ -324,7 +328,6 @@ class LLMClient:
                 last_error = e
                 print(f"[LLM Client] 第 {attempt + 1} 次请求大模型失败 ({model_name}): {e}")
                 if attempt < max_retries:
-                    import asyncio
                     await asyncio.sleep(1)
                 else:
                     latency_ms = int((time.time() - start_time) * 1000)

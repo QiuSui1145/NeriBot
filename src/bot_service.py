@@ -357,7 +357,6 @@ class BotService:
         
         # 自动补全群名/用户名
         if not sess_cfg.display_name:
-            import asyncio
             async def fetch_name():
                 try:
                     if session_type == "group":
@@ -435,6 +434,19 @@ class BotService:
                 "role": "user",
                 "content": "（音理看到群友们的闲聊，自然插话吐槽，第一字必须是 [TEXT] 开口）："
             })
+        elif session_type == "group":
+            # 群聊环境下在末尾注入角色对白强硬锚点，杜绝指令模型将多方对话误判为分析材料
+            if llm_messages and llm_messages[-1]["role"] == "user":
+                last_m = llm_messages[-1]
+                cue_suffix = (
+                    "\n（音理以第一人称对白回复，严禁任何思考分析过程，第一字必须以 [TEXT] 标签开头）："
+                    if is_simultaneous
+                    else "\n（请音理以第一人称口吻直接回复台词，严禁输出任何思考或分析过程）："
+                )
+                if isinstance(last_m.get("content"), str):
+                    last_m["content"] += cue_suffix
+                elif isinstance(last_m.get("content"), list):
+                    last_m["content"].append({"type": "text", "text": cue_suffix})
 
         # 管道前置 Hook (支持插件外部知识/搜索结果/Prompt动态注入)
         from src.plugins.manager import plugin_manager
@@ -445,7 +457,7 @@ class BotService:
         # 获取可用 Agentic 技能工具 Schema
         tools = plugin_manager.get_active_tools_schema(is_admin=is_admin)
 
-        max_tokens_override = 500 if (is_simultaneous or is_active_reply) else None
+        max_tokens_override = 1200 if (is_simultaneous or is_active_reply) else None
 
         try:
             raw_reply, usage = await llm_client.chat_completion(

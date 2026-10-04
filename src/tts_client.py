@@ -86,24 +86,21 @@ class TTSClient:
         t = text.strip()
 
         # 1. 纯标点、纯空格或省略号（如 "...", "。。。", "……"）绝非合法有效对白
-        if not t.strip(" .。…，,！!？?~～-_"):
+        if not t.strip(" .。…，,！!？?~～-_`'\""):
             return True
 
         # 2. 若全文无任何中文字符且无假名，同时包含了典型的对话分析英文词汇（user/prompt/messages/context/system 等），必定为元分析泄露
         has_cjk = bool(re.search(r"[\u4e00-\u9fff\u3040-\u30ff]", t))
-        if not has_cjk and len(t) > 20:
+        if not has_cjk and len(t) > 15:
             if re.search(r"\b(user|prompt|messages?|context|system|chat|reply|response|session|fragmented)\b", t, re.IGNORECASE):
                 return True
 
-        # 3. 统计特征分析词频
+        # 3. 统计特征分析词频（角色对话绝不可能出现任何推演分析关键词）
         score = 0
         for pat in REASONING_PATTERNS:
             if re.search(pat, t, re.IGNORECASE):
                 score += 1
-        # 若特征密集（>=2），或开头直接是元分析语句且具有分析特征
-        if score >= 2:
-            return True
-        if score >= 1 and re.match(r"^(用户|群友|让我|根据|从上下文|从群聊|结合|作为(?:风又)?音理|以(?:普通)?群友|【?系统提示|Thinking Process|Thought Process|The user|As Neri|I need to)", t, re.IGNORECASE):
+        if score >= 1:
             return True
         return False
 
