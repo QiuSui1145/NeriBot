@@ -24,9 +24,10 @@ class LLMClient:
         return url
 
     @staticmethod
-    def _parse_sse_response(raw_text: str) -> Tuple[str, dict]:
+    def _parse_sse_response(raw_text: str, is_decision: bool = False) -> Tuple[str, dict]:
         """解析 SSE (Server-Sent Events) 流式文本为完整的回复内容和用量统计。"""
         import json
+        import re
         chunks = []
         reasoning_chunks = []
         usage = {}
@@ -55,9 +56,15 @@ class LLMClient:
                 continue
 
         reply_text = "".join(chunks)
-        if not reply_text and reasoning_chunks:
+        # 严禁将思考/推理内容作为正常对话文本返回给用户！仅在决策模式下允许兜底
+        if not reply_text and reasoning_chunks and is_decision:
             reply_text = "".join(reasoning_chunks)
-        return reply_text, usage
+        if not is_decision and reply_text:
+            reply_text = re.sub(r'<think>[\s\S]*?</think>', '', reply_text, flags=re.IGNORECASE)
+            reply_text = re.sub(r'<think>[\s\S]*$', '', reply_text, flags=re.IGNORECASE)
+            reply_text = re.sub(r'<thought>[\s\S]*?</thought>', '', reply_text, flags=re.IGNORECASE)
+            reply_text = re.sub(r'<thought>[\s\S]*$', '', reply_text, flags=re.IGNORECASE)
+        return reply_text.strip(), usage
 
     async def fetch_models_list(
         self, base_url: Optional[str] = None, api_key: Optional[str] = None
@@ -263,7 +270,7 @@ class LLMClient:
 
                 # 兼容某些网关（如 OneAPI/New-API 默认流式或强制流式渠道）返回的 text/event-stream (SSE) 格式
                 if "text/event-stream" in content_type or raw_text.startswith("data:"):
-                    reply_text, usage = self._parse_sse_response(raw_text)
+                    reply_text, usage = self._parse_sse_response(raw_text, is_decision=is_decision)
                 else:
                     try:
                         data = resp.json()
@@ -276,9 +283,17 @@ class LLMClient:
                         msg = choices[0].get("message", {})
                         reply_text = msg.get("content") or ""
                         tool_calls = msg.get("tool_calls")
-                        # 兼容部分思考模型将答案放入 reasoning_content 或仅输出 reasoning
-                        if not reply_text and msg.get("reasoning_content"):
+                        # 兼容部分思考模型将答案放入 reasoning_content 或仅输出 reasoning (仅限决策模型调用)
+                        if not reply_text and msg.get("reasoning_content") and is_decision:
                             reply_text = msg.get("reasoning_content") or ""
+                    
+                    if not is_decision and reply_text:
+                        import re
+                        reply_text = re.sub(r'<think>[\s\S]*?</think>', '', reply_text, flags=re.IGNORECASE)
+                        reply_text = re.sub(r'<think>[\s\S]*$', '', reply_text, flags=re.IGNORECASE)
+                        reply_text = re.sub(r'<thought>[\s\S]*?</thought>', '', reply_text, flags=re.IGNORECASE)
+                        reply_text = re.sub(r'<thought>[\s\S]*$', '', reply_text, flags=re.IGNORECASE)
+                    
                     usage = data.get("usage", {})
 
                 usage = data.get("usage", {}) if isinstance(data, dict) else {}

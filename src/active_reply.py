@@ -82,8 +82,11 @@ class ActiveReplyEngine:
             # 强健的 JSON 提取逻辑
             import re
             text = reply_raw.strip()
-            # 过滤思考标签 <think>...</think>
+            # 过滤思考标签 <think>...</think>, <thought>...</thought> 及未闭合思考标签
             text = re.sub(r'<think>[\s\S]*?</think>', '', text, flags=re.IGNORECASE).strip()
+            text = re.sub(r'<think>[\s\S]*$', '', text, flags=re.IGNORECASE).strip()
+            text = re.sub(r'<thought>[\s\S]*?</thought>', '', text, flags=re.IGNORECASE).strip()
+            text = re.sub(r'<thought>[\s\S]*$', '', text, flags=re.IGNORECASE).strip()
             # 尝试正则匹配 markdown 代码块
             m = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
             if m:

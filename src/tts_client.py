@@ -18,6 +18,26 @@ from src.config import config_manager
 AUDIO_CACHE_DIR = Path("cache/audio")
 
 
+REASONING_PATTERNS = [
+    r"让我(?:仔细)?(?:来)?分析",
+    r"分析(?:一下)?上下文",
+    r"从上下文(?:来看)?",
+    r"从群聊内容(?:来看)?",
+    r"结合(?:上方)?群友(?:的)?聊天",
+    r"用户发送了",
+    r"群友发送了",
+    r"系统提示(?:让我|：|:)",
+    r"作为(?:风又)?音理[，,]",
+    r"面对(?:普通)?群友[，,]",
+    r"角色设定[：:]",
+    r"回复策略[：:]",
+    r"思维链(?:路)?[：:]",
+    r"思考过程[：:]",
+    r"Thinking Process",
+    r"Thought Process",
+]
+
+
 class TTSClient:
     """本地 GPT-SoVITS 语音合成客户端。"""
 
@@ -26,6 +46,39 @@ class TTSClient:
         self.cache_dir.mkdir(parents=True, exist_ok=True)
         self.is_synthesizing: bool = False
         self.last_synthesized_time: float = 0.0
+
+    @staticmethod
+    def strip_thinking_and_analysis(text: str) -> str:
+        """全面剔除大模型输出的思考标签与思维链分析块。"""
+        if not text:
+            return ""
+        t = text
+        # 1. 过滤标准及未闭合的思考标签 <think>...</think>, <thought>...</thought>
+        t = re.sub(r"<think>[\s\S]*?</think>", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"<think>[\s\S]*$", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"<thought>[\s\S]*?</thought>", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"<thought>[\s\S]*$", "", t, flags=re.IGNORECASE)
+        # 2. 过滤 markdown 代码块样式的思考
+        t = re.sub(r"```(?:thought|thinking)[\s\S]*?```", "", t, flags=re.IGNORECASE)
+        t = re.sub(r"```(?:thought|thinking)[\s\S]*$", "", t, flags=re.IGNORECASE)
+        return t.strip()
+
+    @staticmethod
+    def is_pure_reasoning_or_analysis(text: str) -> bool:
+        """检测一段文本是否实质上是大模型的推理分析思路，而非角色真实对白。"""
+        if not text or not text.strip():
+            return False
+        t = text.strip()
+        score = 0
+        for pat in REASONING_PATTERNS:
+            if re.search(pat, t, re.IGNORECASE):
+                score += 1
+        # 若特征密集（>=2），或开头直接是元分析语句且具有分析特征
+        if score >= 2:
+            return True
+        if score >= 1 and re.match(r"^(用户发送了|让我|根据系统|从上下文|【?系统提示|Thinking Process)", t):
+            return True
+        return False
 
     async def ping(self) -> Tuple[bool, str]:
         """探测本地 TTS 服务连通性。智能规避推理时的单线程假死误报。"""
@@ -53,12 +106,13 @@ class TTSClient:
     def parse_dual_track(self, raw_content: str) -> Tuple[str, str]:
         """解析同声传译输出格式 [TEXT]中文文本[/TEXT][VOICE]日文配音[/VOICE]。
         如果模型未封装标签或标签因 max_tokens 未完全闭合，则进行智能容错解析。
+        严格防范思考过程与思维链外泄，确保只提取真实对白。
         """
-        raw_str = raw_content.strip()
+        raw_str = self.strip_thinking_and_analysis(raw_content).strip()
         display_text = ""
         voice_text = ""
 
-        # 1. 尝试标准闭合标签匹配
+        # 1. 尝试标准闭合标签匹配（优先提取 [TEXT]，标签外部的所有分析前言均被自动丢弃）
         text_match = re.search(r"\[TEXT\](.*?)\[/TEXT\]", raw_str, flags=re.DOTALL | re.IGNORECASE)
         voice_match = re.search(r"\[VOICE\](.*?)\[/VOICE\]", raw_str, flags=re.DOTALL | re.IGNORECASE)
 
@@ -67,7 +121,7 @@ class TTSClient:
         if voice_match:
             voice_text = voice_match.group(1).strip()
 
-        # 2. 若未闭合，按标签位置切分（应对 token 截断情况）
+        # 2. 若未闭合，按标签位置切分（应对 token 截断情况，丢弃 [TEXT] 前面的所有分析）
         if not display_text and re.search(r"\[TEXT\]", raw_str, flags=re.IGNORECASE):
             parts = re.split(r"\[TEXT\]", raw_str, maxsplit=1, flags=re.IGNORECASE)
             after_text = parts[1]
@@ -81,8 +135,10 @@ class TTSClient:
             after_voice = parts[1]
             voice_text = re.sub(r"\[/?(TEXT|VOICE)\]", "", after_voice, flags=re.IGNORECASE).strip()
 
-        # 3. 若仍无任何标签，整体降级
+        # 3. 若仍无任何标签，检测是否为纯推理/分析思路
         if not display_text and not voice_text:
+            if self.is_pure_reasoning_or_analysis(raw_str):
+                return "", ""
             cleaned_all = re.sub(r"\[/?(TEXT|VOICE)\]", "", raw_str, flags=re.IGNORECASE).strip()
             display_text = cleaned_all
             voice_text = cleaned_all
@@ -91,15 +147,22 @@ class TTSClient:
         elif not voice_text:
             voice_text = display_text
 
-        # 4. 分别清洗（严禁将文本清空）
+        # 4. 二次安全检查与清洗：若提取出的内容本身依然是分析思路，坚决清空
+        if self.is_pure_reasoning_or_analysis(display_text):
+            return "", ""
+
         cleaned_display = self._clean_text(display_text, is_voice=False)
         cleaned_voice = self._clean_text(voice_text, is_voice=True)
 
-        return (cleaned_display or display_text or raw_str), (cleaned_voice or voice_text or raw_str)
+        return (cleaned_display or display_text), (cleaned_voice or voice_text)
 
     def _clean_text(self, text: str, is_voice: bool = False) -> str:
         """剔除表情符号与不适合发音的动作括号，保护中日文字符绝不丢失。"""
         if not text:
+            return ""
+
+        text = self.strip_thinking_and_analysis(text)
+        if self.is_pure_reasoning_or_analysis(text):
             return ""
 
         # 标准 Emoji 字符范围（绝不侵犯 0x4E00-0x9FFF 汉字和 0x3040-0x30FF 假名）
@@ -128,8 +191,10 @@ class TTSClient:
                 cleaned = re.sub(r"（.*?）|\(.*?\)|\[.*?\]|【.*?】", "", cleaned)
 
         cleaned = cleaned.strip()
-        # 若清洗后变为空字符串，退回原始文本，避免吞消息
-        return cleaned if cleaned else text.strip()
+        if self.is_pure_reasoning_or_analysis(cleaned):
+            return ""
+        # 若清洗后变为空字符串，退回原始文本，避免吞消息（前提是原始文本不是纯分析）
+        return cleaned if cleaned else ("" if self.is_pure_reasoning_or_analysis(text) else text.strip())
 
     async def generate_speech(self, text: str, lang: Optional[str] = None) -> Optional[str]:
         """调用本地 GPT-SoVITS 合成音频，返回 Base64 编码数据流或绝对路径。"""

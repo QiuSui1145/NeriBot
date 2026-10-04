@@ -303,6 +303,7 @@ class BotService:
                     # 记录水群日志供 active_reply 决策
                     context_manager.record_group_chatter(group_id, user_id, nickname, clean_text)
 
+                    is_active_reply = False
                     if active_reply_engine.should_check_group(group_id):
                         should_reply, reason = await active_reply_engine.evaluate(group_id)
                         print(f"[ActiveReply] 群 {group_id} 决策模型评估结果: {should_reply} (原因: {reason})")
@@ -311,7 +312,7 @@ class BotService:
                         context_manager.save()
                         
                         if should_reply:
-                            clean_text = "【系统提示：请结合上方群友的聊天内容，自然地插话参与，进行一句简短可爱的吐槽或回复，不要说多余的话】"
+                            is_active_reply = True
                             context_manager.clear_unreplied_group_messages(group_id)
                         else:
                             return
@@ -329,6 +330,7 @@ class BotService:
                 group_log_id=group_log_id,
                 image_urls=image_urls,
                 is_admin=is_admin,
+                is_active_reply=is_active_reply if message_type == "group" else False,
             )
 
         except Exception as e:
@@ -346,6 +348,7 @@ class BotService:
         group_log_id: int = 0,
         image_urls: Optional[List[str]] = None,
         is_admin: bool = False,
+        is_active_reply: bool = False,
     ):
         """驱动模型生成回复并按同传模式合成与发送。"""
         cfg = config_manager.config
@@ -393,9 +396,13 @@ class BotService:
         system_prompt += speaker_profile
 
         # 4. 获取当前会话上下文并写入用户输入（包含多模态图片）
+        # 主动回复时，真实的群聊消息在前面已写入上下文，绝对不能把提示指令当做用户发言写入历史！
         sess = context_manager.get_session(session_type, target_id)
-        evicted_user = sess.add_message("user", user_text, user_name=nickname, images=image_urls or [])
-        context_manager.save()
+        if not is_active_reply:
+            evicted_user = sess.add_message("user", user_text, user_name=nickname, images=image_urls or [])
+            context_manager.save()
+        else:
+            evicted_user = []
 
         # 5. 检查所用模型的多模态图传支持
         model_tag = sess_cfg.model_id or cfg.active_model_id or cfg.llm.model
@@ -422,6 +429,18 @@ class BotService:
         
         from src.prompting import get_tts_anchor_rules
         llm_messages.append({"role": "system", "content": get_tts_anchor_rules()})
+
+        if is_active_reply:
+            llm_messages.append({
+                "role": "system",
+                "content": (
+                    "【当前场景特别指令：群聊主动插话】\n"
+                    "群友们正在闲聊。请作为风又音理，自然地加入群聊闲聊，直接说出你的一句简短、可爱的吐槽或接话。\n"
+                    "【严格限制】\n"
+                    "1. 绝不允许输出任何思考过程、上下文分析、扮演思路或思维链（严禁输出‘用户发送了’、‘让我分析’、‘从上下文来看’、‘<think>’等）。\n"
+                    "2. 严禁任何前言、后记、元解释或第三人称描述，必须直接输出音理的第一人称对白！"
+                )
+            })
 
         # 管道前置 Hook (支持插件外部知识/搜索结果/Prompt动态注入)
         from src.plugins.manager import plugin_manager
@@ -503,15 +522,37 @@ class BotService:
                 stats_tracker.update_group_message_reply(group_log_id, err_text)
             return
 
-        # 6. 解析同传双轨与清洗回复
-        if is_simultaneous:
+        # 6. 解析同传双轨与清洗回复，并执行思维链路安全拦截
+        if is_simultaneous or "[TEXT]" in raw_reply.upper():
             display_text, voice_text = tts_client.parse_dual_track(raw_reply)
         else:
-            display_text = tts_client._clean_text(raw_reply)
-            voice_text = display_text
+            raw_cleaned = tts_client.strip_thinking_and_analysis(raw_reply)
+            if tts_client.is_pure_reasoning_or_analysis(raw_cleaned):
+                display_text, voice_text = "", ""
+            else:
+                display_text = tts_client._clean_text(raw_cleaned)
+                voice_text = display_text
 
         # 管道后置 Hook (回复过滤与修饰)
         display_text = await plugin_manager.hook_after_chat(sess_cfg.session_id, display_text)
+
+        # 安全防御检测：如果输出为分析思路、思维链或空内容，触发安全拦截
+        if not display_text.strip() or tts_client.is_pure_reasoning_or_analysis(display_text):
+            print(f"[BotService 拦截] 识别到生成回复为思维链路/分析思路或空内容: {display_text[:80]}...")
+            if is_active_reply:
+                # 主动回复若未生成有效对白台词，静默放弃，绝不向群聊发送分析文本
+                sess.add_message("planner", "执行终止 | 主动回复生成内容判定为思维链泄露或无效对白，已静默拦截", user_name="Planner")
+                context_manager.save()
+                return
+            else:
+                # 用户主动唤醒或私聊时，降级为元气人设兜底对白
+                display_text = "诶？音理刚才走神了一下下……"
+                voice_text = "あれ？ちょっとぼーっとしてた……"
+
+        # 最终发送前校验：若为空则不发送
+        if not display_text.strip():
+            print("[BotService] 最终回复文本为空，取消发送。")
+            return
 
         # 将助手的展示回复写入记忆上下文
         evicted_assistant = sess.add_message("assistant", display_text)

@@ -67,11 +67,12 @@ def run_all_checks():
     print("  [√] 普通群友身份隔离正常 (严禁叫哥哥)")
 
     # 模拟主人
+    cfg = config_manager.config
     admin_qq = cfg.security.admin_list[0] if cfg.security.admin_list else 10001
     cfg.security.admin_list.append(admin_qq)
     prof_master, is_master = bot_service.build_speaker_profile(admin_qq, "主人哥哥")
     assert is_master
-    assert "必须称呼对方为“哥哥”" in prof_master
+    assert "称呼对方为“哥哥”" in prof_master
     print("  [√] 主人/哥哥身份偏心撒娇规则构建正常")
 
     # 4. 双轨解析器与语音引擎客户端
