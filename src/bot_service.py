@@ -270,6 +270,7 @@ class BotService:
                 return
 
             # 6. 群聊消息唤醒与主动回复决策判定
+            is_active_reply = False
             if message_type == "group":
                 # 检查唤醒词
                 matched_wake_word = None
@@ -303,7 +304,6 @@ class BotService:
                     # 记录水群日志供 active_reply 决策
                     context_manager.record_group_chatter(group_id, user_id, nickname, clean_text)
 
-                    is_active_reply = False
                     if active_reply_engine.should_check_group(group_id):
                         should_reply, reason = await active_reply_engine.evaluate(group_id)
                         print(f"[ActiveReply] 群 {group_id} 决策模型评估结果: {should_reply} (原因: {reason})")
@@ -330,7 +330,7 @@ class BotService:
                 group_log_id=group_log_id,
                 image_urls=image_urls,
                 is_admin=is_admin,
-                is_active_reply=is_active_reply if message_type == "group" else False,
+                is_active_reply=is_active_reply,
             )
 
         except Exception as e:

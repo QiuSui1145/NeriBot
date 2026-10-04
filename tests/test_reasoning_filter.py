@@ -206,6 +206,139 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(kwargs.get("display_text"), "诶？音理刚才走神了一下下……")
         self.assertNotIn("分析", kwargs.get("display_text", ""))
 
+    async def test_on_message_wake_word_trigger_full_flow(self):
+        # 针对本次报错样本：来自群 1050415927 [秋穗(1198728532)]: '音理，现在几点了'
+        test_group = 1050415927
+        test_user = 1198728532
+        sess = context_manager.get_session("group", test_group)
+        sess.clear()
+
+        # 确保该群在白名单中
+        from src.config import config_manager
+        cfg = config_manager.config
+        if test_group not in cfg.security.group_whitelist:
+            cfg.security.group_whitelist.append(test_group)
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        mock_llm_reply = "[TEXT]现在是晚上九点多了哦，哥哥要注意休息呀！[/TEXT][VOICE]もう夜の9時過ぎだよ！[/VOICE]"
+
+        event = {
+            "post_type": "message",
+            "message_type": "group",
+            "sub_type": "normal",
+            "message_id": 99999,
+            "group_id": test_group,
+            "user_id": test_user,
+            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "raw_message": "音理，现在几点了",
+            "message": "音理，现在几点了",
+        }
+
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(mock_llm_reply, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        # 验证：成功外发了回复，没有发生 UnboundLocalError
+        self.assertEqual(len(dispatched_messages), 1)
+        self.assertIn("现在是晚上九点多了哦", dispatched_messages[0][1].get("display_text", ""))
+        
+        # 验证：消息流成功记录了该信息与回复
+        user_msgs = [m for m in sess.history if m.role == "user"]
+        assistant_msgs = [m for m in sess.history if m.role == "assistant"]
+        self.assertEqual(len(user_msgs), 1)
+        self.assertEqual(user_msgs[0].content, "现在几点了")
+        self.assertEqual(len(assistant_msgs), 1)
+        self.assertIn("现在是晚上九点多了哦", assistant_msgs[0].content)
+
+    async def test_on_message_private_full_flow(self):
+        # 测试私聊消息收发完整链路，确保 is_active_reply 初始值正确，不抛异常
+        test_user = 12345678
+        sess = context_manager.get_session("private", test_user)
+        sess.clear()
+
+        from src.config import config_manager
+        cfg = config_manager.config
+        cfg.security.private_whitelist_enabled = False
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        mock_llm_reply = "[TEXT]哥哥你来找音理啦！[/TEXT][VOICE]お兄ちゃん、会いに来てくれたの！[/VOICE]"
+
+        event = {
+            "post_type": "message",
+            "message_type": "private",
+            "sub_type": "friend",
+            "message_id": 88888,
+            "user_id": test_user,
+            "sender": {"nickname": "哥哥", "user_id": test_user},
+            "raw_message": "音理在吗",
+            "message": "音理在吗",
+        }
+
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(mock_llm_reply, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        self.assertEqual(len(dispatched_messages), 1)
+        self.assertIn("哥哥你来找音理啦", dispatched_messages[0][1].get("display_text", ""))
+        user_msgs = [m for m in sess.history if m.role == "user"]
+        assistant_msgs = [m for m in sess.history if m.role == "assistant"]
+        self.assertEqual(len(user_msgs), 1)
+        self.assertEqual(user_msgs[0].content, "音理在吗")
+        self.assertEqual(len(assistant_msgs), 1)
+
+    async def test_on_message_group_active_reply_full_flow(self):
+        # 测试群聊非@非唤醒，决策模型决定主动回复的完整链路
+        test_group = 1050415927
+        test_user = 555666
+        sess = context_manager.get_session("group", test_group)
+        sess.clear()
+
+        from src.config import config_manager
+        cfg = config_manager.config
+        if test_group not in cfg.security.group_whitelist:
+            cfg.security.group_whitelist.append(test_group)
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        mock_llm_reply = "[TEXT]大家在聊什么游戏呀？看起来好好玩！[/TEXT][VOICE]みんな何の話してるの？[/VOICE]"
+
+        event = {
+            "post_type": "message",
+            "message_type": "group",
+            "sub_type": "normal",
+            "message_id": 77777,
+            "group_id": test_group,
+            "user_id": test_user,
+            "sender": {"nickname": "群友B", "user_id": test_user},
+            "raw_message": "这个新游戏太好玩了",
+            "message": "这个新游戏太好玩了",
+        }
+
+        with patch("src.active_reply.active_reply_engine.should_check_group", return_value=True), \
+             patch("src.active_reply.active_reply_engine.evaluate", new=AsyncMock(return_value=(True, "群友讨论有趣游戏"))), \
+             patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(mock_llm_reply, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        # 验证：主动回复成功发出
+        self.assertEqual(len(dispatched_messages), 1)
+        self.assertIn("大家在聊什么游戏呀", dispatched_messages[0][1].get("display_text", ""))
+        # 验证：群友发言与助手回复都在信息流中
+        user_msgs = [m for m in sess.history if m.role == "user"]
+        assistant_msgs = [m for m in sess.history if m.role == "assistant"]
+        self.assertEqual(len(user_msgs), 1)
+        self.assertEqual(user_msgs[0].content, "这个新游戏太好玩了")
+        self.assertEqual(len(assistant_msgs), 1)
+        self.assertIn("大家在聊什么游戏呀", assistant_msgs[0].content)
+
 
 if __name__ == "__main__":
     unittest.main()
