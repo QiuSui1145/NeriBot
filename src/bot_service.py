@@ -432,14 +432,8 @@ class BotService:
 
         if is_active_reply:
             llm_messages.append({
-                "role": "system",
-                "content": (
-                    "【当前场景特别指令：群聊主动插话】\n"
-                    "群友们正在闲聊。请作为风又音理，自然地加入群聊闲聊，直接说出你的一句简短、可爱的吐槽或接话。\n"
-                    "【严格限制】\n"
-                    "1. 绝不允许输出任何思考过程、上下文分析、扮演思路或思维链（严禁输出‘用户发送了’、‘让我分析’、‘从上下文来看’、‘<think>’等）。\n"
-                    "2. 严禁任何前言、后记、元解释或第三人称描述，必须直接输出音理的第一人称对白！"
-                )
+                "role": "user",
+                "content": "（音理看到群友们的闲聊，自然插话吐槽，第一字必须是 [TEXT] 开口）："
             })
 
         # 管道前置 Hook (支持插件外部知识/搜索结果/Prompt动态注入)
@@ -459,8 +453,16 @@ class BotService:
                 user_id=user_id,
                 is_decision=False,
                 model_tag=model_tag,
+                max_tokens_override=450 if is_active_reply else None,
                 tools=tools if tools else None,
             )
+
+            # 严格红线检查 1：主动回复模式下，若模型输出没有包含 [TEXT]，说明大模型极大概率在写推演分析，绝对禁止发送，直接静默放弃！
+            if is_active_reply and "[TEXT]" not in raw_reply.upper():
+                print(f"[BotService 绝对红线拦截] 主动回复输出未包含 [TEXT] 对白标签，判定为思考推演或无效格式，立即静默丢弃: {raw_reply[:100]}...")
+                sess.add_message("planner", "执行终止 | 主动回复生成内容未遵循[TEXT]标签规范，判定为分析思路外泄，已静默拦截", user_name="Planner")
+                context_manager.save()
+                return
 
             # 多轮工具调用执行闭环 (Tool Loop)
             max_tool_turns = 3
@@ -513,6 +515,7 @@ class BotService:
                     user_id=user_id,
                     is_decision=False,
                     model_tag=model_tag,
+                    max_tokens_override=450 if is_active_reply else None,
                     tools=tools if tools else None,
                 )
         except Exception as e:

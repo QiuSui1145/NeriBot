@@ -16,7 +16,7 @@ from src.tts_client import tts_client
 class TestReasoningFilter(unittest.TestCase):
     def setUp(self):
         # 真实线上 ID 1734 事故样本
-        self.incident_sample = (
+        self.incident_sample_1734 = (
             "用户发送了一系列消息，看起来是在群聊中。让我分析一下上下文：\n\n"
             "1. 用户说\"心理有点精神问题，再加上有点纠结，暂时走了\" - 似乎要离开群聊\n"
             "2. 发送了几张图片\n"
@@ -25,6 +25,12 @@ class TestReasoningFilter(unittest.TestCase):
             "5. 又发送了几张图片\n\n"
             "系统提示让我结合群友聊天内容，自然地插话参与，进行一句简短可爱的吐槽或回复。\n\n"
             "作为音理，我是元气开朗的邻家少女，面对普通群友，我会用"
+        )
+        # 真实线上 ID 2166 事故样本
+        self.incident_sample_2166 = (
+            "用户在群聊中分享了《我的世界》服务器的残存影像，展示了一个还原《巧可甜恋》中 Setaria 咖啡馆的建筑。"
+            "其他人对此表示赞叹或提及燃尽感。作为音理，我需要以普通群友的身份自然地插话参与，进行一句简短可爱的吐槽或接话，"
+            "不能叫哥哥，语气要元气开朗。我可以夸赞这个建筑还原得很棒，或者顺着 MaoyuQWQ 说的'建完燃尽'来一句调侃。"
         )
 
     def test_strip_thinking_tags(self):
@@ -45,13 +51,15 @@ class TestReasoningFilter(unittest.TestCase):
         self.assertEqual(tts_client.strip_thinking_and_analysis(raw4), "[TEXT]哥哥快去休息！[/TEXT]")
 
     def test_incident_sample_detection(self):
-        # 必须能够准确识别出 ID 1734 的分析思路泄露
-        self.assertTrue(tts_client.is_pure_reasoning_or_analysis(self.incident_sample))
+        # 必须能够准确识别出 ID 1734 与 ID 2166 的分析思路泄露
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis(self.incident_sample_1734))
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis(self.incident_sample_2166))
 
         # 变体分析思路
         self.assertTrue(tts_client.is_pure_reasoning_or_analysis("让我分析一下群友在聊什么。从上下文来看，大家都在讨论宵夜。"))
         self.assertTrue(tts_client.is_pure_reasoning_or_analysis("系统提示让我回复群友。角色设定：音理需要元气回复。"))
         self.assertTrue(tts_client.is_pure_reasoning_or_analysis("Thinking Process:\n1. User said hello\n2. Reply politely"))
+        self.assertTrue(tts_client.is_pure_reasoning_or_analysis("As Neri, I need to respond to the group chat."))
 
         # 正常台词绝不能被误判
         self.assertFalse(tts_client.is_pure_reasoning_or_analysis("你们在聊什么好吃的呀？音理也想吃！"))
@@ -60,9 +68,13 @@ class TestReasoningFilter(unittest.TestCase):
 
     def test_parse_dual_track_prevention(self):
         # 事故样本无标签 -> 必须完全拦截并返回空文本
-        disp, voice = tts_client.parse_dual_track(self.incident_sample)
-        self.assertEqual(disp, "")
-        self.assertEqual(voice, "")
+        disp1, voice1 = tts_client.parse_dual_track(self.incident_sample_1734)
+        self.assertEqual(disp1, "")
+        self.assertEqual(voice1, "")
+
+        disp2, voice2 = tts_client.parse_dual_track(self.incident_sample_2166)
+        self.assertEqual(disp2, "")
+        self.assertEqual(voice2, "")
 
         # 前置分析 + 正式标签 -> 必须丢弃所有前置分析，只提取标签内台词
         mixed_sample = (
@@ -70,16 +82,16 @@ class TestReasoningFilter(unittest.TestCase):
             "[TEXT]周末去游乐园怎么样？音理也想坐摩天轮！[/TEXT]"
             "[VOICE]週末に遊園地はどうかな？観覧車に乗りたいな！[/VOICE]"
         )
-        disp2, voice2 = tts_client.parse_dual_track(mixed_sample)
-        self.assertEqual(disp2, "周末去游乐园怎么样？音理也想坐摩天轮！")
-        self.assertIn("遊園地", voice2)
-        self.assertNotIn("分析", disp2)
-        self.assertNotIn("用户", disp2)
+        disp3, voice3 = tts_client.parse_dual_track(mixed_sample)
+        self.assertEqual(disp3, "周末去游乐园怎么样？音理也想坐摩天轮！")
+        self.assertIn("遊園地", voice3)
+        self.assertNotIn("分析", disp3)
+        self.assertNotIn("用户", disp3)
 
     def test_clean_text_safety(self):
         # 事故样本清洗后变为空字符串
-        cleaned = tts_client._clean_text(self.incident_sample)
-        self.assertEqual(cleaned, "")
+        self.assertEqual(tts_client._clean_text(self.incident_sample_1734), "")
+        self.assertEqual(tts_client._clean_text(self.incident_sample_2166), "")
 
         # 正常台词清洗正常
         cleaned_normal = tts_client._clean_text("（拉开窗帘）今天的天气真好呀！✨")
@@ -129,6 +141,41 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
         # 验证：3. 记录了 planner 的拦截日志
         planner_msgs = [m for m in history if m.role == "planner"]
         self.assertTrue(any("静默拦截" in m.content for m in planner_msgs))
+
+    async def test_active_reply_incident_2166_silently_aborted(self):
+        # 模拟主动回复时，LLM 返回了 ID 2166 事故样本 (无 [TEXT] 标签且包含大量分析)
+        sample_2166 = (
+            "用户在群聊中分享了《我的世界》服务器的残存影像，展示了一个还原《巧可甜恋》中 Setaria 咖啡馆的建筑。"
+            "其他人对此表示赞叹或提及燃尽感。作为音理，我需要以普通群友的身份自然地插话参与，进行一句简短可爱的吐槽或接话，"
+            "不能叫哥哥，语气要元气开朗。我可以夸赞这个建筑还原得很棒，或者顺着 MaoyuQWQ 说的'建完燃尽'来一句调侃。"
+        )
+        test_group = 888777
+        sess = context_manager.get_session("group", test_group)
+        sess.clear()
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(sample_2166, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service._process_chat(
+                session_type="group",
+                target_id=test_group,
+                user_id=123,
+                nickname="MaoyuQWQ",
+                user_text="[图片] 建完燃尽了",
+                message_type="group",
+                is_active_reply=True,
+            )
+
+        # 绝对红线拦截：由于缺少 [TEXT] 且为分析内容，绝对不外发任何消息！
+        self.assertEqual(len(dispatched_messages), 0)
+        history = sess.history
+        assistant_msgs = [m for m in history if m.role == "assistant"]
+        self.assertEqual(len(assistant_msgs), 0)
+        planner_msgs = [m for m in history if m.role == "planner"]
+        self.assertTrue(any("已静默拦截" in m.content for m in planner_msgs))
 
     async def test_user_chat_reasoning_fallback(self):
         # 模拟普通用户@机器人时，LLM 输出纯分析，系统自动兜底为可爱台词，绝不输出分析思路

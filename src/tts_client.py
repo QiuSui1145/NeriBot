@@ -23,18 +23,28 @@ REASONING_PATTERNS = [
     r"分析(?:一下)?上下文",
     r"从上下文(?:来看)?",
     r"从群聊内容(?:来看)?",
-    r"结合(?:上方)?群友(?:的)?聊天",
-    r"用户发送了",
-    r"群友发送了",
+    r"结合(?:上方)?群友(?:的)?(?:聊天|消息|内容)",
+    r"用户(?:在群聊中|在群里|发送了|提到|说了|分享了|想要我)",
+    r"群友(?:在群聊中|在群里|发送了|提到|说了|分享了|在讨论|在聊)",
     r"系统提示(?:让我|：|:)",
-    r"作为(?:风又)?音理[，,]",
+    r"作为(?:风又)?音理[，,\s]",
+    r"以(?:普通)?群友(?:的)?身份",
+    r"音理的语气(?:要)?",
     r"面对(?:普通)?群友[，,]",
     r"角色设定[：:]",
     r"回复策略[：:]",
     r"思维链(?:路)?[：:]",
     r"思考过程[：:]",
+    r"我需要(?:以|作为|自然地)?",
+    r"可以(?:夸赞|吐槽|回复|调侃)",
     r"Thinking Process",
     r"Thought Process",
+    r"The user (?:is|sent|shared|mentioned)",
+    r"As (?:Kazemata\s+)?Neri",
+    r"I need to",
+    r"Response strategy:",
+    r"Constraints:",
+    r"Key points:",
 ]
 
 
@@ -76,7 +86,7 @@ class TTSClient:
         # 若特征密集（>=2），或开头直接是元分析语句且具有分析特征
         if score >= 2:
             return True
-        if score >= 1 and re.match(r"^(用户发送了|让我|根据系统|从上下文|【?系统提示|Thinking Process)", t):
+        if score >= 1 and re.match(r"^(用户|群友|让我|根据|从上下文|从群聊|结合|作为(?:风又)?音理|以(?:普通)?群友|【?系统提示|Thinking Process|Thought Process|The user|As Neri|I need to)", t, re.IGNORECASE):
             return True
         return False
 
@@ -134,6 +144,12 @@ class TTSClient:
             parts = re.split(r"\[VOICE\]", raw_str, maxsplit=1, flags=re.IGNORECASE)
             after_voice = parts[1]
             voice_text = re.sub(r"\[/?(TEXT|VOICE)\]", "", after_voice, flags=re.IGNORECASE).strip()
+
+        # 丢弃模板占位词
+        if display_text.strip().lower() in ["chinese", "中文", "text", "此处填写面向用户的中文回复内容"]:
+            display_text = ""
+        if voice_text.strip().lower() in ["japanese", "日文", "voice", "此处填写对应的日文配音内容"]:
+            voice_text = ""
 
         # 3. 若仍无任何标签，检测是否为纯推理/分析思路
         if not display_text and not voice_text:

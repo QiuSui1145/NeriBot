@@ -130,7 +130,13 @@ def load_chat_system(
     if enable_simultaneous:
         purposes.append("interpretation.simultaneous")
     bundle = load_prompt_bundles(root, tuple(purposes), language=language)
-    return bundle.content
+    content = bundle.content
+    if session_type == "group":
+        content = content.replace(
+            "你面对的交流对象，是与你死生相依、在这世上你唯一的笨蛋哥哥——钟城 晓（Kaneshiro Akatsuki）。",
+            "你当前正在QQ群聊中与大家一起交流。群里有各路普通群友与朋友，你的哥哥（钟城 晓）也可能在群里。请根据说话者的专属识别档案，以活泼元气的看板娘少女形态参与互动。"
+        )
+    return content
 
 
 def get_tts_anchor_rules() -> str:
