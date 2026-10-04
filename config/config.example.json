@@ -1,0 +1,114 @@
+{
+  "llm": {
+    "base_url": "https://api.openai.com/v1",
+    "api_key": "",
+    "model": "gpt-4o-mini",
+    "temperature": 0.7,
+    "max_tokens": 500,
+    "top_p": 1.0,
+    "max_retries": 3
+  },
+  "decision_llm": {
+    "use_separate_model": false,
+    "base_url": "",
+    "api_key": "",
+    "model": "gpt-4o-mini",
+    "temperature": 0.2,
+    "max_retries": 3
+  },
+  "providers": [
+    {
+      "id": "default",
+      "name": "OpenAI Compatible",
+      "base_url": "https://api.openai.com/v1",
+      "api_key": "",
+      "max_retries": 3,
+      "enabled": true
+    }
+  ],
+  "model_hub": [
+    {
+      "id": "default/gpt-4o-mini",
+      "provider_id": "default",
+      "model_name": "gpt-4o-mini",
+      "display_name": "gpt-4o-mini (默认主模型)",
+      "temperature": 0.7,
+      "max_tokens": 500,
+      "context_limit": 12,
+      "supports_vision": true,
+      "supports_audio": false,
+      "supports_video": false,
+      "prompt_price_per_1m": 1.0,
+      "completion_price_per_1m": 4.0,
+      "prompt_price_per_1k": 0.001,
+      "completion_price_per_1k": 0.004
+    }
+  ],
+  "active_model_id": "default/gpt-4o-mini",
+  "active_decision_model_id": "default/gpt-4o-mini",
+  "session_overrides": {},
+  "onebot": {
+    "mode": "reverse_ws",
+    "reverse_ws_path": "/onebot/v11/ws",
+    "forward_ws_url": "ws://127.0.0.1:3001",
+    "access_token": "",
+    "bot_qq": 0,
+    "nickname": "风又音理"
+  },
+  "security": {
+    "admin_password": "admin",
+    "jwt_secret": "neri_secret_jwt_key_please_change_in_production_32chars",
+    "private_whitelist_enabled": false,
+    "private_whitelist": [],
+    "group_whitelist_enabled": false,
+    "group_whitelist": [],
+    "admin_list": [],
+    "master_qq": 0,
+    "identity_bindings": []
+  },
+  "commands": {
+    "prefix": "/",
+    "wake_words": [
+      "音理",
+      "ねり",
+      "音理酱"
+    ],
+    "require_wake_in_group": true,
+    "enable_reset": true,
+    "enable_help": true,
+    "enable_status": true,
+    "enable_new": true,
+    "enable_chatlist": true,
+    "enable_model": true,
+    "enable_chat_onoff": true
+  },
+  "tts": {
+    "enabled": true,
+    "api_url": "http://127.0.0.1:9880/tts",
+    "gpt_sovits_dir": "",
+    "mode": "simultaneous",
+    "ref_audio_path": "data/tts_ref/ner0092.wav",
+    "prompt_text": "犬もいいけどね。今日は猫ちゃん見たから猫派。",
+    "prompt_lang": "ja",
+    "text_lang": "ja",
+    "speed_factor": 1.0,
+    "send_as_record": true,
+    "audio_send_format": "base64",
+    "gpt_weights_path": "",
+    "sovits_weights_path": ""
+  },
+  "active_reply": {
+    "enabled": false,
+    "strategy": "decision_model",
+    "probability": 0.05,
+    "whitelist": [],
+    "frequency": 5,
+    "min_confidence": 0.7,
+    "idle_timeout_seconds": 0,
+    "max_history_context": 8
+  },
+  "web": {
+    "host": "0.0.0.0",
+    "port": 8088
+  }
+}

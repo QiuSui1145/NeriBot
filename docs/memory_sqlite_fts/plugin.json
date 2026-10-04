@@ -1,0 +1,32 @@
+{
+  "$schema": "neri_plugin_v1",
+  "id": "memory_sqlite_fts",
+  "name": "轻量 SQLite 记忆系统驱动",
+  "version": "1.0.0",
+  "author": "Neri Dev",
+  "description": "极速、零外部依赖的轻量化记忆系统驱动。使用本地内置 SQLite 数据库与关键词匹配，无需安装庞大的 Torch 与向量嵌入模型，适合低配服务器与开箱即用场景",
+  "icon": "🗄️",
+  "homepage": "https://github.com/neri-project/memory_sqlite_fts",
+  "min_bot_version": "1.0.0",
+  "permissions": [
+    "memory_driver"
+  ],
+  "dependencies": {
+    "python": [],
+    "plugins": []
+  },
+  "memory_drivers": ["sqlite_fts"],
+  "ui": {
+    "has_tab": false,
+    "has_overview_card": true,
+    "settings_schema": [
+      {
+        "key": "max_search_results",
+        "label": "单次召回条数",
+        "type": "number",
+        "default": 3,
+        "description": "单次向大模型提示词注入的最大记忆条目数"
+      }
+    ]
+  }
+}

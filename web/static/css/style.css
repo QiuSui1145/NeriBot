@@ -1,0 +1,419 @@
+/* 音理 WebUI 全局质感玻璃拟态样式表 */
+
+body {
+  font-family: 'Plus Jakarta Sans', 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+  background-color: #050814;
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(14, 165, 233, 0.12) 0px, transparent 50%),
+    radial-gradient(at 100% 0%, rgba(168, 85, 247, 0.12) 0px, transparent 50%),
+    radial-gradient(at 50% 100%, rgba(6, 182, 212, 0.08) 0px, transparent 50%);
+  background-attachment: fixed;
+}
+
+/* 玻璃质感面板 */
+.glass-card {
+  background: rgba(13, 20, 38, 0.52);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+
+.glass-header {
+  background: rgba(7, 12, 26, 0.72);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* 指标卡片 */
+.metric-card {
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(51, 65, 85, 0.5);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  transition: all 0.2s ease;
+}
+
+.metric-card:hover {
+  border-color: rgba(56, 189, 248, 0.4);
+  transform: translateY(-2px);
+}
+
+/* 输入控件样式 */
+.input-field {
+  width: 100%;
+  background: rgba(15, 23, 42, 0.65);
+  border: 1px solid rgba(51, 65, 85, 0.65);
+  border-radius: 0.625rem;
+  padding: 0.55rem 0.85rem;
+  font-size: 0.8125rem;
+  color: #f1f5f9;
+  outline: none;
+  transition: all 0.2s ease;
+}
+
+.input-field:focus {
+  border-color: #38bdf8;
+  box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+}
+
+/* 主要按钮与次要按钮 */
+.btn-primary {
+  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
+  color: #ffffff;
+  font-weight: 600;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background: linear-gradient(135deg, #0369a1 0%, #0284c7 100%);
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.45);
+  transform: translateY(-1px);
+}
+
+.btn-secondary {
+  background: rgba(30, 41, 59, 0.8);
+  border: 1px solid rgba(71, 85, 105, 0.6);
+  color: #e2e8f0;
+  font-weight: 500;
+  border-radius: 0.625rem;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: rgba(51, 65, 85, 0.8);
+  color: #ffffff;
+}
+
+/* 导航侧边按钮 */
+.nav-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  border-radius: 0.625rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #94a3b8;
+  transition: all 0.15s ease;
+  text-align: left;
+}
+
+.nav-btn:hover {
+  background: rgba(30, 41, 59, 0.6);
+  color: #f1f5f9;
+}
+
+.nav-btn.active {
+  background: rgba(14, 165, 233, 0.15);
+  color: #38bdf8;
+  font-weight: 600;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+/* 选项卡面板隐藏与显示 */
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block;
+}
+
+/* 对话气泡样式 */
+.chat-bubble-bot {
+  background: rgba(15, 23, 42, 0.9);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  padding: 0.6rem 0.85rem;
+  border-radius: 0.25rem 1rem 1rem 1rem;
+  color: #f1f5f9;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  max-width: 85%;
+}
+
+.chat-bubble-user {
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  padding: 0.6rem 0.85rem;
+  border-radius: 1rem 0.25rem 1rem 1rem;
+  color: #ffffff;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  max-width: 85%;
+}
+
+/* 滚动条美化 */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(51, 65, 85, 0.5);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(71, 85, 105, 0.8);
+}
+
+/* 信息流多模态图片与异常状态美化 */
+.flow-chat-img {
+  max-width: 280px;
+  max-height: 280px;
+  width: auto;
+  height: auto;
+  border-radius: 0.75rem;
+  object-fit: contain;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(0, 0, 0, 0.25);
+  transition: transform 0.18s ease, opacity 0.18s ease, box-shadow 0.18s ease;
+}
+
+.flow-chat-img:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 18px rgba(14, 165, 233, 0.25);
+}
+
+.flow-img-expired,
+.flow-img-fallback {
+  user-select: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* 亮色模式适配 (Theme Light) */
+body.theme-light .flow-chat-img {
+  border-color: rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.04);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08);
+}
+
+body.theme-light .flow-img-expired,
+body.theme-light .flow-img-fallback {
+  background: rgba(241, 245, 249, 0.95) !important;
+  border-color: rgba(203, 213, 225, 0.8) !important;
+  color: #64748b !important;
+}
+
+body.theme-light .chat-bubble-bot {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(14, 165, 233, 0.3);
+  color: #0f172a;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+}
+
+body.theme-light .chat-bubble-user {
+  background: linear-gradient(135deg, #0284c7 0%, #2563eb 100%);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(2, 132, 199, 0.2);
+}
+
+/* 记忆系统审计时间线节点美化 */
+.mem-timeline-item {
+  position: relative;
+  padding-bottom: 0.75rem;
+}
+
+.mem-timeline-item::before {
+  content: '';
+  position: absolute;
+  left: -29px;
+  top: 14px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #22d3ee;
+  border: 2px solid #0f172a;
+  box-shadow: 0 0 8px rgba(34, 211, 238, 0.6);
+  z-index: 10;
+}
+
+/* ========================================================
+   移动端响应式与触摸体验深度适配 (Mobile Viewport Optimization)
+   ======================================================== */
+@media (max-width: 768px) {
+  /* 解决移动端 iOS Safari 自动放大输入框的问题 */
+  input, select, textarea, .input-field {
+    font-size: 16px !important;
+  }
+
+  /* 调整卡片边距与阴影 */
+  .glass-card {
+    padding: 1rem !important;
+    border-radius: 1rem !important;
+  }
+
+  /* 移动端侧边抽屉阴影与深度 */
+  #app-sidebar {
+    box-shadow: 0 0 35px rgba(0, 0, 0, 0.7);
+    padding: 1rem 0.75rem !important;
+  }
+
+  .nav-btn {
+    padding: 0.65rem 0.75rem;
+    font-size: 0.8125rem;
+  }
+
+  /* 按钮触摸区域优化 */
+  button, .nav-btn, [role="button"] {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* 信息流双区面板在移动端单列堆叠 */
+  #flow-session-detail {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* ========================================================
+   居中半透明磨砂玻璃二次确认与提示弹窗 (Glassmorphism Modal System)
+   ======================================================== */
+#neri-modal-backdrop {
+  position: fixed !important;
+  inset: 0 !important;
+  background: rgba(3, 7, 18, 0.75) !important;
+  backdrop-filter: blur(14px) !important;
+  -webkit-backdrop-filter: blur(14px) !important;
+  z-index: 100000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  transition: opacity 0.22s ease-out !important;
+  padding: 1rem !important;
+}
+
+#neri-modal-backdrop.show {
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+#neri-modal-box {
+  width: 100% !important;
+  max-width: 440px !important;
+  border-radius: 1.25rem !important;
+  background: rgba(13, 20, 38, 0.92) !important;
+  border: 1px solid rgba(56, 189, 248, 0.35) !important;
+  backdrop-filter: blur(28px) !important;
+  -webkit-backdrop-filter: blur(28px) !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), 0 0 35px rgba(14, 165, 233, 0.15) !important;
+  padding: 1.5rem !important;
+  color: #f1f5f9 !important;
+  transform: scale(0.92) translateY(12px) !important;
+  transition: transform 0.24s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  position: relative !important;
+  overflow: hidden !important;
+}
+
+#neri-modal-box::before {
+  content: '';
+  position: absolute;
+  top: -40px;
+  right: -40px;
+  width: 120px;
+  height: 120px;
+  background: radial-gradient(circle, rgba(56, 189, 248, 0.25) 0%, transparent 70%);
+  pointer-events: none;
+}
+
+#neri-modal-backdrop.show #neri-modal-box {
+  transform: scale(1) translateY(0) !important;
+}
+
+#neri-modal-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #f8fafc;
+  margin-bottom: 0.75rem;
+}
+
+#neri-modal-body {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: #cbd5e1;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin-bottom: 1.25rem;
+}
+
+/* 亮色模式弹窗适配 */
+body.theme-light #neri-modal-box {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border: 1px solid rgba(184, 150, 199, 0.45) !important;
+  color: #1e293b !important;
+  box-shadow: 0 25px 60px rgba(120, 95, 135, 0.2) !important;
+}
+
+body.theme-light #neri-modal-title {
+  color: #0f172a !important;
+}
+
+body.theme-light #neri-modal-body {
+  color: #334155 !important;
+}
+
+/* 隐秘模式 (Stealth Mode) 专用样式 */
+#btn-stealth-mode.active {
+  background: rgba(49, 46, 129, 0.65) !important;
+  border-color: rgba(129, 140, 248, 0.6) !important;
+  color: #e0e7ff !important;
+  box-shadow: 0 0 14px rgba(99, 102, 241, 0.35) !important;
+}
+
+#btn-stealth-mode.active i {
+  color: #a5b4fc !important;
+}
+
+/* 隐秘模式敏感输入框保护：输入时自动脱敏模糊，鼠标悬停或聚焦时可正常核对编辑 */
+body.stealth-mode-active .stealth-sensitive-input,
+body.stealth-mode-active #cfg-sec-priv-list,
+body.stealth-mode-active #cfg-sec-group-list,
+body.stealth-mode-active #cfg-sec-admin-list,
+body.stealth-mode-active #cfg-identity-master-qq,
+body.stealth-mode-active #new-id-qq,
+body.stealth-mode-active #sim-input-qq,
+body.stealth-mode-active #mem-form-qq,
+body.stealth-mode-active #filter-grouplog-gid {
+  filter: blur(5px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+
+body.stealth-mode-active .stealth-sensitive-input:hover,
+body.stealth-mode-active .stealth-sensitive-input:focus,
+body.stealth-mode-active #cfg-sec-priv-list:hover,
+body.stealth-mode-active #cfg-sec-priv-list:focus,
+body.stealth-mode-active #cfg-sec-group-list:hover,
+body.stealth-mode-active #cfg-sec-group-list:focus,
+body.stealth-mode-active #cfg-sec-admin-list:hover,
+body.stealth-mode-active #cfg-sec-admin-list:focus,
+body.stealth-mode-active #cfg-identity-master-qq:hover,
+body.stealth-mode-active #cfg-identity-master-qq:focus,
+body.stealth-mode-active #new-id-qq:hover,
+body.stealth-mode-active #new-id-qq:focus,
+body.stealth-mode-active #sim-input-qq:hover,
+body.stealth-mode-active #sim-input-qq:focus,
+body.stealth-mode-active #mem-form-qq:hover,
+body.stealth-mode-active #mem-form-qq:focus,
+body.stealth-mode-active #filter-grouplog-gid:hover,
+body.stealth-mode-active #filter-grouplog-gid:focus {
+  filter: none;
+  user-select: auto;
+}
+
+
+

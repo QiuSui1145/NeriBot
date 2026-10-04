@@ -1,0 +1,754 @@
+/* ========================================================
+   Kazamata Neri (音理) 全息高定 WebUI 深度主题样式表 v4.2
+   全域字体多主题自适应 + 彻底杜绝暗色字体发黑 + 0%~100%透明度 + 消除 0px 模糊畸变
+   ======================================================== */
+
+:root {
+  --neri-hair: #D4C9DA;
+  --neri-hair-light: #F2EEF5;
+  --neri-purple: #B896C7;
+  --neri-primary: #9C6B9E;
+  --neri-primary-hover: #835285;
+  --neri-accent: #E35F6A;
+  --neri-cloak: #4A3B43;
+  --neri-dark-bg: #120E17;
+  --neri-light-bg: #F6F4F9;
+  
+  --panel-blur: 16px;
+  --panel-blur-css: blur(16px);
+  --panel-opacity: 0.65;
+  --tab-anim-duration: 0.45s;
+  --header-height: 54px;
+  
+  /* 滚动字幕动态变量 */
+  --marquee-top-size: 14px;
+  --marquee-top-height: 32px;
+  --marquee-bot-size: 12px;
+  --marquee-bot-height: 28px;
+}
+
+/* 基础平滑与壁纸适配 */
+body {
+  background-size: cover !important;
+  background-attachment: fixed !important;
+  background-position: center !important;
+  transition: background-color 0.35s ease, color 0.35s ease;
+  min-height: 100vh;
+}
+
+/* 顶部状态栏 Header 始终固定在视口最顶端 */
+header.glass-header {
+  top: 0 !important;
+}
+
+/* ========================================================
+   1. 侧边栏与主设置页全面 NapCat 磨砂悬浮化 (0%~100% 透明度可控)
+   ======================================================== */
+aside.w-56 {
+  width: 15rem !important;
+}
+
+aside nav {
+  background-color: var(--sidebar-bg-color, rgba(255, 255, 255, var(--panel-opacity))) !important;
+  backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  -webkit-backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  border: 1px solid var(--glass-border, rgba(184, 150, 199, 0.28)) !important;
+  border-radius: 1.25rem !important;
+  padding: 0.75rem !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1) !important;
+  transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+.nav-btn {
+  border-radius: 0.75rem !important;
+  padding: 0.65rem 0.9rem !important;
+  font-weight: 600 !important;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+}
+
+.nav-btn:hover {
+  transform: translateX(3px);
+}
+
+.nav-btn.active {
+  background: linear-gradient(135deg, rgba(156, 107, 158, 0.32) 0%, rgba(184, 150, 199, 0.22) 100%) !important;
+  color: var(--neri-nav-active-color, #9C6B9E) !important;
+  border: 1px solid var(--neri-nav-active-border, rgba(156, 107, 158, 0.45)) !important;
+  font-weight: 700 !important;
+  box-shadow: 0 4px 15px rgba(156, 107, 158, 0.18) !important;
+}
+
+.glass-card, 
+.metric-card,
+section.tab-pane,
+main > div,
+.rounded-2xl {
+  border-radius: 1.25rem !important;
+}
+
+/* ========================================================
+   2. 亮色模式 (Light Theme) 全局字体与控件深度适配
+   ======================================================== */
+body.theme-light {
+  background-color: var(--neri-light-bg) !important;
+  color: #2D2328 !important;
+  --sidebar-bg-color: rgba(255, 255, 255, calc(var(--panel-opacity) * 0.85));
+  --glass-border: rgba(184, 150, 199, 0.28);
+  --card-bg-color: rgba(255, 255, 255, calc(var(--panel-opacity) * 0.7));
+  --subcard-bg-color: rgba(246, 241, 250, calc(var(--panel-opacity) * 0.5));
+  --neri-nav-active-color: #6C3572;
+  --neri-nav-active-border: rgba(156, 107, 158, 0.45);
+}
+
+body.theme-light header {
+  background-color: rgba(255, 255, 255, var(--panel-opacity)) !important;
+  border-bottom: 1px solid rgba(184, 150, 199, 0.3) !important;
+  backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  -webkit-backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  box-shadow: 0 4px 20px rgba(120, 95, 135, 0.05) !important;
+}
+
+body.theme-light header h1, 
+body.theme-light header span, 
+body.theme-light header p {
+  color: #2D2328 !important;
+}
+
+body.theme-light .glass-card,
+body.theme-light .metric-card {
+  background-color: var(--card-bg-color) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  -webkit-backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  box-shadow: 0 10px 30px rgba(120, 95, 135, 0.06) !important;
+}
+
+body.theme-light .sub-card,
+body.theme-light [class*="bg-slate-"],
+body.theme-light [class*="bg-zinc-"],
+body.theme-light [class*="bg-gray-"],
+body.theme-light [class*="bg-indigo-950"],
+body.theme-light [class*="bg-purple-950"],
+body.theme-light [class*="bg-rose-950"],
+body.theme-light [class*="bg-cyan-950"] {
+  background-color: var(--subcard-bg-color) !important;
+  border-color: rgba(184, 150, 199, 0.3) !important;
+  color: #2D2328 !important;
+}
+
+/* 亮色模式全域文字深色高清晰 */
+body.theme-light h1, body.theme-light h2, body.theme-light h3, body.theme-light h4,
+body.theme-light .neri-card-title,
+body.theme-light [class*="text-slate-100"],
+body.theme-light [class*="text-slate-200"],
+body.theme-light [class*="text-slate-300"],
+body.theme-light [class*="text-slate-400"],
+body.theme-light [class*="text-white"],
+body.theme-light [class*="text-gray-"],
+body.theme-light [class*="text-zinc-"] {
+  color: #2D2328 !important;
+}
+
+body.theme-light p,
+body.theme-light .neri-subtext,
+body.theme-light [class*="text-slate-500"] {
+  color: #5C4A58 !important;
+}
+
+body.theme-light .neri-label {
+  color: #2D2328 !important;
+  font-weight: 700 !important;
+}
+
+body.theme-light .neri-empty-tip {
+  color: #7D6978 !important;
+}
+
+body.theme-light [class*="text-cyan-"],
+body.theme-light [class*="text-indigo-"],
+body.theme-light [class*="text-purple-"] {
+  color: var(--neri-primary) !important;
+}
+
+body.theme-light input,
+body.theme-light select,
+body.theme-light textarea,
+body.theme-light .input-field {
+  background-color: rgba(255, 255, 255, 0.95) !important;
+  color: #2D2328 !important;
+  border: 1px solid rgba(184, 150, 199, 0.45) !important;
+  border-radius: 0.625rem;
+}
+
+body.theme-light .neri-btn-outline {
+  color: #5C2D62 !important;
+  border-color: rgba(156, 107, 158, 0.45) !important;
+  background-color: rgba(255, 255, 255, 0.75) !important;
+  font-weight: 600 !important;
+}
+
+body.theme-light .neri-btn-danger {
+  color: #BE123C !important;
+  background-color: rgba(254, 226, 226, 0.7) !important;
+  border: 1px solid rgba(244, 63, 94, 0.4) !important;
+}
+
+body.theme-light .btn-play-song,
+body.theme-light .btn-use-wp {
+  background-color: rgba(156, 107, 158, 0.15) !important;
+  color: #5C2D62 !important;
+  border: 1px solid rgba(156, 107, 158, 0.45) !important;
+  font-weight: 700 !important;
+}
+
+/* ========================================================
+   3. 暗色模式 (Dark Theme) - 绝杀所有发暗不可见字体！
+   ======================================================== */
+body.theme-dark,
+body.dark {
+  background-color: var(--neri-dark-bg) !important;
+  color: #FAF5FC !important;
+  --sidebar-bg-color: rgba(20, 15, 24, calc(var(--panel-opacity) * 0.82));
+  --glass-border: rgba(196, 181, 205, 0.2);
+  --card-bg-color: rgba(20, 15, 24, calc(var(--panel-opacity) * 0.68));
+  --subcard-bg-color: rgba(30, 22, 38, calc(var(--panel-opacity) * 0.5));
+  --neri-nav-active-color: #FFFFFF;
+  --neri-nav-active-border: rgba(226, 186, 238, 0.6);
+}
+
+body.theme-dark header,
+body.dark header {
+  background-color: rgba(20, 15, 24, var(--panel-opacity)) !important;
+  border-bottom: 1px solid rgba(196, 181, 205, 0.18) !important;
+  backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  -webkit-backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+}
+
+/* 核心！强制覆盖所有深色/中间色文字，暗色下一律明亮通透！ */
+body.theme-dark h1, body.theme-dark h2, body.theme-dark h3, body.theme-dark h4,
+body.dark h1, body.dark h2, body.dark h3, body.dark h4,
+body.theme-dark .neri-card-title,
+body.dark .neri-card-title,
+body.theme-dark .neri-label,
+body.dark .neri-label,
+body.theme-dark label,
+body.dark label,
+body.theme-dark th,
+body.dark th,
+body.theme-dark [class*="text-slate-900"],
+body.dark [class*="text-slate-900"],
+body.theme-dark [class*="text-slate-800"],
+body.dark [class*="text-slate-800"],
+body.theme-dark [class*="text-slate-700"],
+body.dark [class*="text-slate-700"],
+body.theme-dark [class*="text-slate-100"],
+body.dark [class*="text-slate-100"],
+body.theme-dark [class*="text-white"],
+body.dark [class*="text-white"] {
+  color: #FFFFFF !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+}
+
+/* 说明文字与副文本在暗色下为高对比浅紫灰 */
+body.theme-dark p,
+body.dark p,
+body.theme-dark .neri-subtext,
+body.dark .neri-subtext,
+body.theme-dark .neri-empty-tip,
+body.dark .neri-empty-tip,
+body.theme-dark .opacity-70,
+body.dark .opacity-70,
+body.theme-dark .opacity-75,
+body.dark .opacity-75,
+body.theme-dark [class*="text-slate-400"],
+body.dark [class*="text-slate-400"],
+body.theme-dark [class*="text-slate-500"],
+body.dark [class*="text-slate-500"] {
+  color: #E2D7E6 !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.theme-dark .glass-card,
+body.theme-dark .metric-card,
+body.dark .glass-card,
+body.dark .metric-card {
+  background-color: var(--card-bg-color) !important;
+  border: 1px solid var(--glass-border) !important;
+  backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  -webkit-backdrop-filter: var(--panel-blur-css, blur(16px)) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35) !important;
+}
+
+body.theme-dark .sub-card,
+body.dark .sub-card {
+  background-color: var(--subcard-bg-color) !important;
+  border: 1px solid rgba(216, 165, 235, 0.25) !important;
+  color: #FAF5FC !important;
+}
+
+/* 按钮高亮白字 + 鲜艳边框 */
+body.theme-dark .btn-play-song,
+body.theme-dark .btn-use-wp,
+body.dark .btn-play-song,
+body.dark .btn-use-wp {
+  background-color: rgba(184, 150, 199, 0.32) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(226, 186, 238, 0.6) !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+}
+
+body.theme-dark .btn-play-song:hover,
+body.theme-dark .btn-use-wp:hover,
+body.dark .btn-play-song:hover,
+body.dark .btn-use-wp:hover {
+  background-color: #9C6B9E !important;
+  color: #FFFFFF !important;
+  border-color: #FFFFFF !important;
+}
+
+body.theme-dark .neri-btn-outline,
+body.dark .neri-btn-outline {
+  background-color: rgba(184, 150, 199, 0.22) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(226, 186, 238, 0.55) !important;
+  font-weight: 600 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5) !important;
+}
+
+body.theme-dark .neri-btn-outline:hover,
+body.dark .neri-btn-outline:hover {
+  background-color: rgba(184, 150, 199, 0.4) !important;
+  color: #FFFFFF !important;
+}
+
+body.theme-dark .neri-btn-danger,
+body.dark .neri-btn-danger {
+  color: #FFB3BA !important;
+  background-color: rgba(225, 29, 72, 0.25) !important;
+  border: 1px solid rgba(244, 63, 94, 0.6) !important;
+  font-weight: 600 !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6) !important;
+}
+
+body.theme-dark .neri-btn-danger:hover,
+body.dark .neri-btn-danger:hover {
+  background-color: rgba(225, 29, 72, 0.45) !important;
+  color: #FFFFFF !important;
+}
+
+/* 徽章在暗色模式下醒目可见 */
+body.theme-dark .neri-badge,
+body.dark .neri-badge {
+  background-color: rgba(200, 150, 230, 0.25) !important;
+  color: #F8F3FA !important;
+  border: 1px solid rgba(226, 186, 238, 0.45) !important;
+  font-weight: 700 !important;
+}
+
+/* 音乐控件纯澈白字 */
+body.theme-dark #player-song-title,
+body.dark #player-song-title {
+  color: #FFFFFF !important;
+  font-weight: 700 !important;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.8), 0 0 12px rgba(226, 186, 238, 0.6) !important;
+}
+
+body.theme-dark #player-song-sub,
+body.dark #player-song-sub {
+  color: #E2D7E6 !important;
+  font-weight: 600 !important;
+}
+
+body.theme-dark input,
+body.theme-dark select,
+body.theme-dark textarea,
+body.theme-dark .input-field,
+body.dark input,
+body.dark select,
+body.dark textarea,
+body.dark .input-field {
+  background-color: rgba(36, 27, 44, 0.92) !important;
+  color: #FAF5FC !important;
+  border: 1px solid rgba(196, 181, 205, 0.35) !important;
+}
+
+body.theme-dark input:focus,
+body.theme-dark select:focus,
+body.theme-dark textarea:focus,
+body.dark input:focus,
+body.dark select:focus,
+body.dark textarea:focus {
+  border-color: #E2BAEE !important;
+  box-shadow: 0 0 0 3px rgba(226, 186, 238, 0.3) !important;
+}
+
+/* ========================================================
+   4. 页面切换动画 (速率完全可控)
+   ======================================================== */
+@keyframes neriTabIn {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.994);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.tab-pane {
+  display: none;
+}
+
+.tab-pane.active {
+  display: block !important;
+  animation: neriTabIn var(--tab-anim-duration, 0.45s) cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+}
+
+/* 通用保存按钮 */
+.neri-btn-save {
+  background: linear-gradient(135deg, var(--neri-primary) 0%, var(--neri-purple) 100%) !important;
+  color: #ffffff !important;
+  border: none !important;
+  box-shadow: 0 4px 15px rgba(156, 107, 158, 0.35) !important;
+  transition: all 0.25s ease !important;
+  border-radius: 0.75rem !important;
+}
+
+.neri-btn-save:hover {
+  transform: translateY(-1.5px) !important;
+  box-shadow: 0 6px 20px rgba(156, 107, 158, 0.5) !important;
+  filter: brightness(1.08);
+}
+
+/* ========================================================
+   5. 上下字幕条与动态自适应遮罩
+   ======================================================== */
+.marquee-container {
+  width: 100%;
+  pointer-events: none;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.3s ease, height 0.3s ease;
+}
+
+.marquee-top {
+  position: sticky;
+  top: var(--header-height, 53px);
+  left: 0;
+  z-index: 45;
+  height: var(--marquee-top-height);
+  border-bottom: 1px solid rgba(184, 150, 199, 0.15);
+}
+
+.marquee-bottom {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  z-index: 45;
+  height: var(--marquee-bot-height);
+}
+
+.marquee-text {
+  display: inline-block;
+  white-space: nowrap;
+  padding-left: 100%;
+  animation: marqueeScroll 22s linear infinite;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+@keyframes marqueeScroll {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-100%); }
+}
+
+/* ========================================================
+   6. 悬浮黑胶音乐控件
+   ======================================================== */
+#neri-music-player {
+  position: fixed;
+  bottom: 35px;
+  right: 35px;
+  background: rgba(26, 20, 31, 0.85);
+  backdrop-filter: var(--panel-blur-css, blur(16px));
+  -webkit-backdrop-filter: var(--panel-blur-css, blur(16px));
+  border: 1px solid rgba(196, 181, 205, 0.32);
+  border-radius: 9999px;
+  padding: 6px 14px 6px 6px;
+  z-index: 10000;
+  cursor: grab;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  user-select: none;
+  max-width: 420px;
+  transition: box-shadow 0.25s, transform 0.15s;
+}
+
+body.theme-light #neri-music-player {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(184, 150, 199, 0.45);
+  box-shadow: 0 8px 25px rgba(120, 95, 135, 0.18);
+}
+
+#neri-music-player:active {
+  cursor: grabbing;
+  transform: scale(0.98);
+}
+
+.cd-spin {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: 2px solid var(--neri-purple);
+  overflow: hidden;
+  box-shadow: 0 0 12px rgba(184, 150, 199, 0.4);
+  animation: spin 3.5s linear infinite;
+  animation-play-state: paused;
+  flex-shrink: 0;
+}
+
+.cd-spin.playing {
+  animation-play-state: running;
+}
+
+@keyframes spin {
+  100% { transform: rotate(360deg); }
+}
+
+.player-ctrl-btn {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(184, 150, 199, 0.18);
+  color: var(--neri-primary);
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+body.theme-dark .player-ctrl-btn,
+body.dark .player-ctrl-btn {
+  color: #FFFFFF !important;
+  background: rgba(200, 160, 220, 0.25) !important;
+}
+
+.player-ctrl-btn:hover {
+  background: var(--neri-primary) !important;
+  color: #ffffff !important;
+  transform: scale(1.1);
+}
+
+.player-btn-main {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+  background: var(--neri-primary) !important;
+  color: #ffffff !important;
+}
+
+/* ========================================================
+   7. 粒子特效画布
+   ======================================================== */
+#neri-fx-canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 99999;
+}
+
+/* ========================================================
+   8. 歌单与壁纸库折叠卡片组件样式
+   ======================================================== */
+.collapsible-card {
+  border-radius: 1rem;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.collapsible-header {
+  cursor: pointer;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 1.25rem;
+  transition: background-color 0.2s;
+}
+
+.collapsible-header:hover {
+  background-color: rgba(184, 150, 199, 0.14);
+}
+
+.collapsible-content {
+  padding: 1.25rem;
+  transition: all 0.3s ease;
+}
+
+.collapsible-content.collapsed {
+  display: none;
+}
+
+/* ========================================================
+   9. 高定二次元磨砂弹窗与 Toast
+   ======================================================== */
+#neri-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 8, 14, 0.65);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 100000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+}
+
+#neri-modal-backdrop.show {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+#neri-modal-box {
+  width: 90%;
+  max-width: 440px;
+  border-radius: 1.25rem;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(184, 150, 199, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3);
+  padding: 1.5rem;
+  transform: scale(0.92) translateY(10px);
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+body.theme-dark #neri-modal-box,
+body.dark #neri-modal-box {
+  background: rgba(28, 22, 34, 0.95);
+  border-color: rgba(216, 165, 235, 0.45);
+  color: #F8F3FA;
+}
+
+#neri-modal-backdrop.show #neri-modal-box {
+  transform: scale(1) translateY(0);
+}
+
+#neri-toast-container {
+  position: fixed;
+  top: 45px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100005;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+
+.neri-toast-item {
+  padding: 0.65rem 1.25rem;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(184, 150, 199, 0.45);
+  backdrop-filter: blur(16px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  font-size: 0.825rem;
+  font-weight: 600;
+  color: #382A35;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  animation: neriToastIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  pointer-events: auto;
+}
+
+body.theme-dark .neri-toast-item,
+body.dark .neri-toast-item {
+  background: rgba(32, 24, 40, 0.95);
+  border-color: rgba(216, 165, 235, 0.5);
+  color: #FFFFFF;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.4);
+}
+
+@keyframes neriToastIn {
+  from { opacity: 0; transform: translateY(-12px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* ========================================================
+   8. 主页组件模块化三档预设尺寸 (S / M / L) 与拖拽高光
+   ======================================================== */
+.widget-size-sm {
+  grid-column: span 1 / span 1 !important;
+}
+
+.widget-size-md {
+  grid-column: span 1 / span 1 !important;
+}
+@media (min-width: 768px) {
+  .widget-size-md {
+    grid-column: span 2 / span 2 !important;
+  }
+}
+
+.widget-size-lg {
+  grid-column: span 1 / span 1 !important;
+}
+@media (min-width: 768px) {
+  .widget-size-lg {
+    grid-column: span 2 / span 2 !important;
+  }
+}
+@media (min-width: 1024px) {
+  .widget-size-lg {
+    grid-column: span 4 / span 4 !important;
+  }
+}
+
+/* 拖拽编辑卡片交互动效 */
+.widget-drag-item {
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.2s ease, opacity 0.2s ease;
+}
+.widget-drag-item.dragging {
+  opacity: 0.45;
+  transform: scale(0.98);
+}
+.widget-drag-item.drag-over {
+  border-color: #38bdf8 !important;
+  background-color: rgba(56, 189, 248, 0.12) !important;
+}
+
+/* 侧边栏桌面端固定悬浮，不跟随页面滚动 */
+@media (min-width: 768px) {
+  #app-sidebar {
+    position: sticky !important;
+    top: calc(var(--header-height, 54px) + var(--marquee-top-height, 0px) + 1.25rem) !important;
+    bottom: auto !important;
+    left: auto !important;
+    right: auto !important;
+    transform: none !important;
+    -webkit-transform: none !important;
+    transition: none !important;
+    align-self: flex-start !important;
+    max-height: calc(100vh - var(--header-height, 54px) - var(--marquee-top-height, 0px) - 2rem) !important;
+    overflow-y: auto !important;
+    z-index: 30 !important;
+  }
+}
+

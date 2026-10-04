@@ -1,0 +1,64 @@
+# 整个 prompts 目录是音理（风又音理 / Kazamata Neri）的提示词集合
+prompts:
+  chat.character:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: chat.character-zh
+          segments:
+            - content: "@master/chat.character/chat.character-zh.md"
+    - language: ja
+      variants:
+        - variant: "-"
+          name: chat.character-ja
+          segments:
+            - content: "@master/chat.character/chat.character-ja.md"
+  chat.group:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: chat.group-zh
+          segments:
+            - content: "@master/chat.group/chat.group-zh.md"
+  chat.private:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: chat.private-zh
+          segments:
+            - content: "@master/chat.private/chat.private-zh.md"
+  chat.safety:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: chat.safety-zh
+          segments:
+            - content: "@master/chat.safety/chat.safety-zh.md"
+  world.worldview:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: world.worldview-zh
+          segments:
+            - content: "@master/world.worldview/world.worldview-zh.md"
+  companion.rules:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: companion.rules-zh
+          segments:
+            - content: "@master/companion.rules/companion.rules-zh.md"
+  decision.active_reply:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: decision.active_reply-zh
+          segments:
+            - content: "@master/decision.active_reply/decision.active_reply-zh.md"
+  interpretation.simultaneous:
+    - language: zh
+      variants:
+        - variant: "-"
+          name: interpretation.simultaneous-zh
+          segments:
+            - content: "@master/interpretation.simultaneous/instruction-zh.md"

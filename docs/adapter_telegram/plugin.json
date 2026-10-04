@@ -1,0 +1,40 @@
+{
+  "$schema": "neri_plugin_v1",
+  "id": "adapter_telegram",
+  "name": "Telegram 机器人通信适配器",
+  "version": "1.0.0",
+  "author": "Neri Dev",
+  "description": "使音理直接连接 Telegram Bot 平台。支持收发文本、多模态图片、语音发送与群组管理，与 QQ 平台无缝共享同一套记忆与语音能力",
+  "icon": "✈️",
+  "homepage": "https://github.com/neri-project/adapter_telegram",
+  "min_bot_version": "1.0.0",
+  "permissions": [
+    "network",
+    "adapter"
+  ],
+  "dependencies": {
+    "python": ["httpx>=0.24.0"],
+    "plugins": []
+  },
+  "adapters": ["telegram_bot"],
+  "ui": {
+    "has_tab": false,
+    "has_overview_card": true,
+    "settings_schema": [
+      {
+        "key": "bot_token",
+        "label": "Telegram Bot Token",
+        "type": "password",
+        "default": "",
+        "description": "从 @BotFather 获取的机器人口令"
+      },
+      {
+        "key": "proxy_url",
+        "label": "HTTP 代理地址 (可选)",
+        "type": "text",
+        "default": "",
+        "description": "例如 http://127.0.0.1:7890 (国内服务器连接 TG 需配置)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "enabled_plugins": [
+    "skill_websearch",
+    "memory_sqlite_fts",
+    "adapter_telegram"
+  ],
+  "active_memory_driver": "chroma_default",
+  "active_tts_driver": "gpt_sovits_default"
+}

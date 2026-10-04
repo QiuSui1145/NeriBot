@@ -1,0 +1,45 @@
+{
+  "$schema": "neri_plugin_v1",
+  "id": "skill_websearch",
+  "name": "实时联网搜索与资讯增强",
+  "version": "1.0.0",
+  "author": "Neri Dev",
+  "description": "提供大模型自主调用的实时网页检索技能 (Skill)，当被询问时事、最新资讯或知识时自动上网获取信息并回答",
+  "icon": "🌐",
+  "homepage": "https://github.com/neri-project/skill_websearch",
+  "min_bot_version": "1.0.0",
+  "permissions": [
+    "network",
+    "call_skill"
+  ],
+  "dependencies": {
+    "python": ["httpx>=0.24.0"],
+    "plugins": []
+  },
+  "skills": ["web_search"],
+  "ui": {
+    "has_tab": false,
+    "has_overview_card": true,
+    "settings_schema": [
+      {
+        "key": "max_results",
+        "label": "最大搜索结果条数",
+        "type": "number",
+        "default": 3,
+        "description": "单次大模型检索最多抓取的网页条目数"
+      },
+      {
+        "key": "search_engine",
+        "label": "搜索引擎提供商",
+        "type": "select",
+        "default": "duckduckgo",
+        "description": "用于获取实时网络信息的引擎",
+        "options": [
+          {"label": "DuckDuckGo (无需密钥)", "value": "duckduckgo"},
+          {"label": "Bing Search", "value": "bing"},
+          {"label": "自定义 HTTP 代理", "value": "custom"}
+        ]
+      }
+    ]
+  }
+}

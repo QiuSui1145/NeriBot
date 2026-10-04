@@ -1,0 +1,38 @@
+{
+  "themeMode": "dark",
+  "panelBlur": 0,
+  "panelOpacity": 1,
+  "tabAnimDuration": 1.2,
+  "playMode": "single",
+  "currentWallpaperId": "",
+  "wallpapers": [],
+  "currentSongId": "",
+  "playlist": [],
+  "mouseFx": {
+    "enabled": true,
+    "trailStyle": "stardust",
+    "clickStyle": "bloom",
+    "decayRate": 0.039,
+    "particleSize": 4
+  },
+  "topMarquee": {
+    "enabled": true,
+    "text": "Kazamata Neri System Online Working...",
+    "delimiter": "",
+    "spacing": 16,
+    "size": 20,
+    "opacity": 0.9,
+    "maskOpacity": 0.6
+  },
+  "bottomMarquee": {
+    "enabled": false,
+    "text": "正在运行 Neri OS | 链路状态正常",
+    "delimiter": "",
+    "spacing": 12,
+    "size": 12,
+    "opacity": 0.75,
+    "maskOpacity": 0.5
+  },
+  "_v46DefaultDark": true,
+  "_v47OpacityRefreshed": true
+}

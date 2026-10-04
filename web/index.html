@@ -1,0 +1,2421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>音理 · QQ机器人控制面板</title>
+  <link rel="icon" href="/static/img/avatar.png">
+  <!-- Google Fonts & Tailwind CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Chart.js for Token Analytics -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- FontAwesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=2.0.6">
+  <link rel="stylesheet" href="/static/css/neri_theme.css?v=4.6.2">
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans selection:bg-cyan-500 selection:text-white">
+
+  <!-- ================= 登录浮层 ================= -->
+  <div id="login-modal" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md transition-all">
+    <div class="glass-card w-full max-w-md p-8 rounded-2xl border border-slate-700/60 shadow-2xl relative overflow-hidden">
+      <div class="absolute -top-16 -right-16 w-40 h-40 bg-cyan-500/20 rounded-full blur-3xl pointer-events-none"></div>
+      <div class="absolute -bottom-16 -left-16 w-40 h-40 bg-purple-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="text-center mb-6">
+        <img src="/static/img/avatar.png" alt="Inori" class="w-20 h-20 rounded-full mx-auto shadow-lg border-2 border-cyan-400/50 object-cover">
+        <h2 class="text-2xl font-bold mt-4 tracking-wide text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400">音理 · 控制中心</h2>
+        <p class="text-xs text-slate-400 mt-1">OneBot11 · NapCat · 本地TTS同传 · 默认规范</p>
+      </div>
+
+      <form id="login-form" class="space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">管理账号</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-user text-sm"></i></span>
+            <input type="text" id="login-username" value="admin" class="input-field pl-10" required>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-300 mb-1">管理密码</label>
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400"><i class="fa-solid fa-lock text-sm"></i></span>
+            <input type="password" id="login-password" placeholder="默认 admin123" class="input-field pl-10" required>
+          </div>
+        </div>
+
+        <div id="login-error" class="hidden text-xs text-rose-400 bg-rose-950/40 p-2.5 rounded-lg border border-rose-800/50 text-center"></div>
+
+        <button type="submit" class="btn-primary w-full py-2.5 mt-2 flex items-center justify-center gap-2">
+          <span>登录控制台</span>
+          <i class="fa-solid fa-arrow-right text-xs"></i>
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ================= 主工作台界面 ================= -->
+  <div id="app-container" class="hidden flex-1 flex flex-col min-h-screen">
+    
+    <!-- 顶部导航栏 -->
+    <header class="glass-header sticky top-0 z-50 border-b border-slate-800/80 px-3 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between">
+      <div class="flex items-center gap-2 sm:gap-3">
+        <!-- 移动端汉堡抽屉菜单按钮 -->
+        <button id="btn-mobile-menu" type="button" class="md:hidden text-slate-300 hover:text-cyan-400 p-2 rounded-lg bg-slate-900/80 border border-slate-800 focus:outline-none focus:ring-1 focus:ring-cyan-400/50 transition cursor-pointer" title="展开/收起导航菜单">
+          <i class="fa-solid fa-bars text-base"></i>
+        </button>
+
+        <div class="relative shrink-0">
+          <img src="/static/img/avatar.png" class="w-8 h-8 sm:w-10 sm:h-10 rounded-full object-cover border border-cyan-400/60 shadow">
+          <span id="header-bot-badge" class="absolute bottom-0 right-0 w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-full bg-slate-500 border-2 border-slate-950" title="OneBot连接状态"></span>
+        </div>
+        <div class="min-w-0">
+          <div class="flex items-center gap-1.5 sm:gap-2">
+            <h1 class="font-bold text-xs sm:text-sm tracking-wide text-slate-100 truncate">Neri System Panel</h1>
+            <div class="flex items-center gap-1 group">
+              <span id="header-bot-qq" class="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 font-mono" data-qq="未获取">QQ: 未获取</span>
+              <button id="btn-toggle-qq-mask" class="text-slate-500 hover:text-cyan-400 opacity-0 group-hover:opacity-100 transition-all focus:outline-none hidden sm:inline" title="显示/隐藏QQ号">
+                <i class="fa-solid fa-eye-slash" id="icon-qq-mask"></i>
+              </button>
+            </div>
+          </div>
+          <p class="text-[10px] sm:text-xs text-slate-400 flex items-center gap-1.5 sm:gap-2 truncate">
+            <span id="header-llm-model" class="truncate"><i class="fa-solid fa-microchip mr-1"></i>--</span>
+            <span class="hidden sm:inline">•</span>
+            <span id="header-tts-status" class="hidden sm:inline"><i class="fa-solid fa-headphones mr-1"></i>TTS: 检测中</span>
+          </p>
+        </div>
+      </div>
+
+      <!-- 现实世界时间感知指示器 -->
+      <div class="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg bg-slate-900/80 border border-slate-800 text-xs">
+        <i class="fa-regular fa-clock text-cyan-400"></i>
+        <span id="header-real-time-date" class="text-slate-400">--</span>
+        <span id="header-real-time-clock" class="text-cyan-300 font-mono font-semibold">--:--:--</span>
+        <span id="header-real-time-period" class="px-1.5 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-800/60 text-[10px] font-medium">--</span>
+      </div>
+
+      <!-- 快捷动作与退出 -->
+      <div class="flex items-center gap-2 sm:gap-3">
+        <button id="btn-quick-ping-tts" class="text-xs px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer" title="测试TTS连通">
+          <i class="fa-solid fa-bolt text-amber-400"></i>
+          <span class="hidden sm:inline">测试TTS连通</span>
+        </button>
+        <!-- 隐秘模式切换按钮 (置于退出登录左侧) -->
+        <button id="btn-stealth-mode" class="text-xs px-2.5 sm:px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition cursor-pointer" title="隐秘模式 (隐藏群号与QQ等敏感信息)">
+          <i id="btn-stealth-icon" class="fa-solid fa-user-secret text-slate-400"></i>
+          <span id="btn-stealth-text" class="hidden sm:inline">隐秘模式: 关</span>
+        </button>
+        <button id="btn-logout" class="text-xs px-2.5 sm:px-3 py-1.5 rounded-lg bg-rose-950/40 hover:bg-rose-900/60 text-rose-300 border border-rose-800/50 flex items-center gap-1.5 transition cursor-pointer" title="退出登录">
+          <i class="fa-solid fa-right-from-bracket"></i>
+          <span class="hidden sm:inline">退出</span>
+        </button>
+      </div>
+    </header>
+
+    <!-- 顶端状态栏下方滚动横幅 -->
+    <div id="marquee-top" class="marquee-container marquee-top"></div>
+
+    <!-- 主体区域：侧边导航 + 内容卡片 -->
+    <div class="flex-1 flex flex-col md:flex-row max-w-[1600px] w-full mx-auto px-2.5 sm:px-4 py-3 sm:py-6 gap-4 sm:gap-6">
+
+      <!-- 移动端侧边抽屉遮罩 -->
+      <div id="mobile-nav-backdrop" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-40 hidden md:hidden transition-opacity duration-300"></div>
+
+      <!-- 左侧选项卡导航（移动端抽屉 / 桌面端固定悬浮侧栏） -->
+      <aside id="app-sidebar" class="fixed inset-y-0 left-0 z-50 w-64 bg-slate-950/95 border-r border-slate-800 p-4 transition-transform duration-300 ease-in-out -translate-x-full md:translate-x-0 md:transform-none md:transition-none md:inset-auto md:sticky md:self-start md:w-56 md:shrink-0 md:bg-transparent md:border-0 md:p-0">
+        <!-- 移动端抽屉顶部标题与关闭按钮 -->
+        <div class="flex md:hidden items-center justify-between pb-3 mb-3 border-b border-slate-800">
+          <div class="flex items-center gap-2 text-cyan-400 font-bold text-xs">
+            <i class="fa-solid fa-compass"></i>
+            <span>控制台导航</span>
+          </div>
+          <button id="btn-close-mobile-nav" type="button" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg cursor-pointer">
+            <i class="fa-solid fa-xmark text-base"></i>
+          </button>
+        </div>
+
+        <nav class="space-y-1.5 scrollbar-thin">
+          <button data-tab="tab-overview" class="nav-btn active">
+            <i class="fa-solid fa-chart-line w-5 text-center"></i>
+            <span>看板与Token统计</span>
+          </button>
+          <button data-tab="tab-flow" class="nav-btn">
+            <i class="fa-solid fa-layer-group w-5 text-center"></i>
+            <span>上下信息流总管理</span>
+          </button>
+          <button data-tab="tab-llm" class="nav-btn">
+            <i class="fa-solid fa-brain w-5 text-center"></i>
+            <span>LLM供应商与模型库</span>
+          </button>
+          <button data-tab="tab-tts" class="nav-btn">
+            <i class="fa-solid fa-wand-magic-sparkles w-5 text-center"></i>
+            <span>本地TTS与同传</span>
+          </button>
+          <button data-tab="tab-whitelist" class="nav-btn">
+            <i class="fa-solid fa-shield-halved w-5 text-center"></i>
+            <span>白名单与管理员</span>
+          </button>
+          <button data-tab="tab-identities" class="nav-btn">
+            <i class="fa-solid fa-id-card w-5 text-center"></i>
+            <span>人物识别与身份绑定</span>
+          </button>
+          <button data-tab="tab-memory" class="nav-btn">
+            <i class="fa-solid fa-network-wired w-5 text-center"></i>
+            <span>Neri Memory OS</span>
+          </button>
+          <button data-tab="tab-grouplogs" class="nav-btn">
+            <i class="fa-solid fa-book-open w-5 text-center"></i>
+            <span>白名单群聊日志</span>
+          </button>
+          <button data-tab="tab-commands" class="nav-btn">
+            <i class="fa-solid fa-terminal w-5 text-center"></i>
+            <span>快速指令与主动回复</span>
+          </button>
+          <button data-tab="tab-persona" class="nav-btn">
+            <i class="fa-solid fa-book-bookmark w-5 text-center"></i>
+            <span>人格提示词 (系统)</span>
+          </button>
+          <button data-tab="tab-sandbox" class="nav-btn">
+            <i class="fa-solid fa-comments w-5 text-center"></i>
+            <span>Neri聊天</span>
+          </button>
+          <button data-tab="tab-plugins" class="nav-btn">
+            <i class="fa-solid fa-puzzle-piece w-5 text-center"></i>
+            <span>插件生态与驱动</span>
+          </button>
+          <!-- 插件微前端动态 Tab 导航注入容器 -->
+          <div id="dynamic-nav-container" class="space-y-1.5"></div>
+          <button id="nav-btn-ui-settings" data-tab="tab-ui-settings" class="nav-btn">
+            <i class="fa-solid fa-wand-magic-sparkles w-5 text-center"></i>
+            <span>UI 视觉与偏好</span>
+          </button>
+          <button data-tab="tab-settings" class="nav-btn">
+            <i class="fa-solid fa-gear w-5 text-center"></i>
+            <span>连接与系统安全</span>
+          </button>
+        </nav>
+      </aside>
+
+      <!-- 右侧内容区域 -->
+      <main class="flex-1 min-w-0 space-y-6">
+
+        <!-- ================= TAB 1: 看板与Token统计 ================= -->
+        <!-- ================= TAB 1: 看板与Token统计 (模块化组件网格) ================= -->
+        <section id="tab-overview" class="tab-pane active space-y-6">
+          
+          <div id="overview-widgets-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            
+            <!-- 组件 1: 核心指标概览 (w-metrics) -->
+            <div id="widget-metrics" class="widget-card widget-size-lg" data-widget-id="w-metrics">
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 h-full">
+                <div class="metric-card">
+                  <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                    <span>今日消耗 Token</span>
+                    <i class="fa-solid fa-fire text-amber-400 text-sm"></i>
+                  </div>
+                  <div class="text-2xl font-bold mt-2 text-cyan-300" id="stat-today-tokens">0</div>
+                  <div class="text-xs text-slate-400 mt-1 flex justify-between">
+                    <span>调用: <span id="stat-today-calls" class="text-slate-200">0</span> 次</span>
+                    <span>Prompt: <span id="stat-today-prompt">0</span></span>
+                  </div>
+                </div>
+
+                <div class="metric-card">
+                  <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                    <span>历史总计 Token</span>
+                    <i class="fa-solid fa-database text-sky-400 text-sm"></i>
+                  </div>
+                  <div class="text-2xl font-bold mt-2 text-indigo-300" id="stat-total-tokens">0</div>
+                  <div class="text-xs text-slate-400 mt-1 flex justify-between">
+                    <span>总调用: <span id="stat-total-calls" class="text-slate-200">0</span></span>
+                    <span>Output: <span id="stat-total-completion">0</span></span>
+                  </div>
+                </div>
+
+                <div class="metric-card">
+                  <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                    <span>平均响应耗时</span>
+                    <i class="fa-solid fa-stopwatch text-emerald-400 text-sm"></i>
+                  </div>
+                  <div class="text-2xl font-bold mt-2 text-emerald-300"><span id="stat-avg-latency">0</span> ms</div>
+                  <div class="text-xs text-slate-400 mt-1">包含 LLM 网络与推理延迟</div>
+                </div>
+
+                <div class="metric-card">
+                  <div class="flex items-center justify-between text-slate-400 text-xs font-semibold">
+                    <span>OneBot11 / NapCat 状态</span>
+                    <i class="fa-brands fa-qq text-cyan-400 text-sm"></i>
+                  </div>
+                  <div class="flex items-center gap-2 mt-2">
+                    <span id="stat-onebot-dot" class="w-3 h-3 rounded-full bg-rose-500"></span>
+                    <span id="stat-onebot-text" class="font-bold text-sm text-slate-200">未连接</span>
+                  </div>
+                  <div class="text-xs text-slate-400 mt-1 truncate" id="stat-onebot-sub">等待 NapCat 反向连接...</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 组件 2: Token 消耗走势 (w-chart) - 支持 24h / 7d / 30d / 12m -->
+            <div id="widget-chart" class="widget-card widget-size-lg glass-card p-5 rounded-2xl border border-slate-800" data-widget-id="w-chart">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div class="flex items-center gap-2.5">
+                  <i class="fa-solid fa-chart-column text-cyan-400"></i>
+                  <h3 class="text-sm font-bold text-slate-200" id="chart-title">Token 消耗走势 (Prompt / Completion)</h3>
+                </div>
+                
+                <div class="flex items-center gap-2 flex-wrap">
+                  <!-- 时间维度切换按钮组 -->
+                  <div class="inline-flex rounded-lg bg-slate-900/90 p-0.5 border border-slate-800 text-xs" id="chart-range-group">
+                    <button type="button" class="chart-range-btn px-2.5 py-1 rounded-md text-[11px] font-semibold transition text-slate-400 hover:text-slate-200" data-range="24h">24小时</button>
+                    <button type="button" class="chart-range-btn px-2.5 py-1 rounded-md text-[11px] font-semibold transition bg-cyan-950 text-cyan-300 border border-cyan-800 active" data-range="7d">7天</button>
+                    <button type="button" class="chart-range-btn px-2.5 py-1 rounded-md text-[11px] font-semibold transition text-slate-400 hover:text-slate-200" data-range="30d">30天</button>
+                    <button type="button" class="chart-range-btn px-2.5 py-1 rounded-md text-[11px] font-semibold transition text-slate-400 hover:text-slate-200" data-range="12m">12个月</button>
+                  </div>
+                  <button id="btn-refresh-chart" class="text-xs text-slate-400 hover:text-cyan-300 transition p-1.5 rounded-lg border border-slate-800 hover:border-slate-700 bg-slate-900/60" title="刷新图表">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
+              </div>
+              <div class="h-64 w-full">
+                <canvas id="tokenChart"></canvas>
+              </div>
+            </div>
+
+            <!-- 组件 3: 成本统计窗口 (w-cost) -->
+            <div id="widget-cost" class="widget-card widget-size-md glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between" data-widget-id="w-cost">
+              <div>
+                <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+                  <h3 class="text-sm font-bold flex items-center gap-2 text-slate-200">
+                    <i class="fa-solid fa-coins text-amber-400"></i>
+                    <span>模型开销与成本统计</span>
+                  </h3>
+                  <button id="btn-refresh-cost" class="text-xs text-slate-400 hover:text-amber-300 transition p-1" title="刷新成本数据">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
+                <!-- 3 核心数值卡 -->
+                <div class="grid grid-cols-3 gap-2.5 mb-3 text-center">
+                  <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <span class="text-[11px] text-slate-400 block mb-0.5">今日消耗</span>
+                    <span id="cost-today" class="text-lg font-bold font-mono text-amber-300">¥0.00</span>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <span class="text-[11px] text-slate-400 block mb-0.5">本月累计</span>
+                    <span id="cost-month" class="text-lg font-bold font-mono text-cyan-300">¥0.00</span>
+                  </div>
+                  <div class="p-2.5 rounded-xl bg-slate-900/80 border border-slate-800">
+                    <span class="text-[11px] text-slate-400 block mb-0.5">历史总开销</span>
+                    <span id="cost-total" class="text-lg font-bold font-mono text-purple-300">¥0.00</span>
+                  </div>
+                </div>
+                <!-- 各模型明细折叠/列表 -->
+                <div class="space-y-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin text-xs" id="cost-breakdown-list">
+                  <div class="text-slate-500 py-3 text-center text-xs">暂无计费模型记录</div>
+                </div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-2 border-t border-slate-800/80 pt-2 flex items-center justify-between">
+                <span>提示：可在 [LLM供应商与模型库] 为每个模型设置单价</span>
+                <span class="text-slate-400 font-mono">单位：¥ / 1M Tokens</span>
+              </p>
+            </div>
+
+            <!-- 组件 4: 硬件系统资源监测 (w-system) -->
+            <div id="widget-system" class="widget-card widget-size-md glass-card p-5 rounded-2xl border border-slate-800" data-widget-id="w-system">
+              <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+                <h3 class="text-sm font-bold flex items-center gap-2 text-slate-200">
+                  <i class="fa-solid fa-microchip text-emerald-400"></i>
+                  <span>系统硬件资源实时监测</span>
+                </h3>
+                <span id="sys-refresh-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" title="实时数据流"></span>
+              </div>
+              <div class="space-y-3 text-xs">
+                <!-- CPU -->
+                <div>
+                  <div class="flex justify-between text-[11px] mb-1">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                      <i class="fa-solid fa-brain text-cyan-400"></i>
+                      <span>CPU 负载 (<span id="sys-cpu-cores">--</span> 逻辑核心)</span>
+                    </span>
+                    <span id="sys-cpu-percent" class="font-mono font-bold text-cyan-300">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                    <div id="sys-cpu-bar" class="bg-cyan-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- RAM -->
+                <div>
+                  <div class="flex justify-between text-[11px] mb-1">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                      <i class="fa-solid fa-memory text-purple-400"></i>
+                      <span>物理内存 (<span id="sys-ram-used">0</span> / <span id="sys-ram-total">0</span> GB)</span>
+                    </span>
+                    <span id="sys-ram-percent" class="font-mono font-bold text-purple-300">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                    <div id="sys-ram-bar" class="bg-purple-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- GPU -->
+                <div>
+                  <div class="flex justify-between text-[11px] mb-1">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                      <i class="fa-solid fa-bolt text-emerald-400"></i>
+                      <span id="sys-gpu-name" class="truncate max-w-[170px]" title="GPU">RTX 4060 显存</span>
+                    </span>
+                    <span id="sys-gpu-val" class="font-mono font-bold text-emerald-300">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                    <div id="sys-gpu-bar" class="bg-emerald-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                  </div>
+                </div>
+
+                <!-- Disk -->
+                <div>
+                  <div class="flex justify-between text-[11px] mb-1">
+                    <span class="text-slate-400 flex items-center gap-1.5">
+                      <i class="fa-solid fa-hard-drive text-amber-400"></i>
+                      <span>存储空间 (<span id="sys-disk-used">0</span> / <span id="sys-disk-total">0</span> GB)</span>
+                    </span>
+                    <span id="sys-disk-percent" class="font-mono font-bold text-amber-300">0%</span>
+                  </div>
+                  <div class="w-full bg-slate-900 rounded-full h-2 overflow-hidden border border-slate-800">
+                    <div id="sys-disk-bar" class="bg-amber-400 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 组件 5: 系统在线时间与进程状态 (w-uptime) -->
+            <div id="widget-uptime" class="widget-card widget-size-sm glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between" data-widget-id="w-uptime">
+              <div>
+                <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+                  <h3 class="text-sm font-bold flex items-center gap-2 text-slate-200">
+                    <i class="fa-solid fa-clock-rotate-left text-sky-400"></i>
+                    <span>系统在线时间</span>
+                  </h3>
+                  <span class="px-2 py-0.5 rounded text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800 font-bold">运行中</span>
+                </div>
+                <div class="py-2 text-center">
+                  <div class="text-[11px] text-slate-400 mb-1">已稳定守护运行</div>
+                  <div id="uptime-clock" class="text-xl sm:text-2xl font-bold font-mono text-cyan-300 tracking-wider">--</div>
+                </div>
+                <div class="mt-2 space-y-1.5 text-[11px] text-slate-400 border-t border-slate-800/80 pt-2.5">
+                  <div class="flex justify-between">
+                    <span>启动时间:</span>
+                    <span id="uptime-start" class="text-slate-200 font-mono">--</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>进程 PID:</span>
+                    <span id="uptime-pid" class="text-slate-200 font-mono">--</span>
+                  </div>
+                  <div class="flex justify-between">
+                    <span>Python:</span>
+                    <span id="uptime-python" class="text-slate-200 font-mono">--</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 组件 6: 模型使用分布 (w-distribution) -->
+            <div id="widget-distribution" class="widget-card widget-size-md glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between" data-widget-id="w-distribution">
+              <div>
+                <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+                  <h3 class="text-sm font-bold flex items-center gap-2 text-slate-200">
+                    <i class="fa-solid fa-chart-pie text-purple-400"></i>
+                    <span>模型调用与消耗分布</span>
+                  </h3>
+                  <button id="btn-refresh-distribution" class="text-xs text-slate-400 hover:text-purple-300 transition p-1" title="刷新分布">
+                    <i class="fa-solid fa-rotate-right"></i>
+                  </button>
+                </div>
+                <!-- 环形图与列表并排容器 -->
+                <div class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                  <div class="sm:col-span-5 h-36 flex items-center justify-center relative">
+                    <canvas id="modelDistChart"></canvas>
+                  </div>
+                  <div class="sm:col-span-7 space-y-1.5 max-h-36 overflow-y-auto pr-1 scrollbar-thin text-xs" id="model-dist-list">
+                    <div class="text-slate-500 py-4 text-center text-xs">暂无模型调用数据</div>
+                  </div>
+                </div>
+              </div>
+              <p class="text-[10px] text-slate-500 mt-2 border-t border-slate-800/80 pt-1.5 flex justify-between">
+                <span>基于实际成功完成的请求 Token 汇总</span>
+              </p>
+            </div>
+
+            <!-- 组件 7: 服务链路与接口延迟 (w-network) -->
+            <div id="widget-network" class="widget-card widget-size-sm glass-card p-5 rounded-2xl border border-slate-800 flex flex-col justify-between" data-widget-id="w-network">
+              <div>
+                <div class="flex items-center justify-between mb-3 border-b border-slate-800 pb-2.5">
+                  <h3 class="text-sm font-bold flex items-center gap-2 text-slate-200">
+                    <i class="fa-solid fa-tower-broadcast text-teal-400"></i>
+                    <span>服务链路与延迟</span>
+                  </h3>
+                  <span class="text-[10px] text-slate-400">心跳正常</span>
+                </div>
+                <div class="space-y-2.5 text-xs">
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                    <span class="flex items-center gap-1.5 text-slate-300">
+                      <i class="fa-brands fa-qq text-cyan-400"></i>
+                      <span>OneBot11</span>
+                    </span>
+                    <span id="link-onebot-badge" class="font-mono text-[11px] text-emerald-400">在线</span>
+                  </div>
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                    <span class="flex items-center gap-1.5 text-slate-300">
+                      <i class="fa-solid fa-headphones text-purple-400"></i>
+                      <span>GPT-SoVITS</span>
+                    </span>
+                    <span id="link-tts-badge" class="font-mono text-[11px] text-emerald-400">在线</span>
+                  </div>
+                  <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/80 border border-slate-800">
+                    <span class="flex items-center gap-1.5 text-slate-300">
+                      <i class="fa-solid fa-cloud text-amber-400"></i>
+                      <span>LLM 网关响应</span>
+                    </span>
+                    <span id="link-llm-latency" class="font-mono text-[11px] text-cyan-300">-- ms</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 组件 8: 最近请求日志明细表 (w-logs) -->
+            <div id="widget-logs" class="widget-card widget-size-lg glass-card p-5 rounded-2xl border border-slate-800" data-widget-id="w-logs">
+              <div class="flex items-center justify-between mb-4">
+                <h3 class="text-sm font-bold flex items-center gap-2 text-slate-200">
+                  <i class="fa-solid fa-list-check text-sky-400"></i>
+                  <span>最近请求与 Token 明细明细记录</span>
+                </h3>
+                <div class="flex items-center gap-2">
+                  <button id="btn-clear-stats" class="text-xs text-rose-400 hover:text-rose-300 transition">清空记录</button>
+                  <button id="btn-refresh-logs" class="text-xs text-slate-400 hover:text-cyan-300 transition">刷新</button>
+                </div>
+              </div>
+              <div class="overflow-x-auto">
+                <table class="w-full text-xs text-left text-slate-300">
+                  <thead class="text-[11px] uppercase bg-slate-900/60 text-slate-400 border-b border-slate-800">
+                    <tr>
+                      <th class="py-2.5 px-3">时间</th>
+                      <th class="py-2.5 px-3">会话来源</th>
+                      <th class="py-2.5 px-3">用户QQ</th>
+                      <th class="py-2.5 px-3">模型</th>
+                      <th class="py-2.5 px-3 text-right">Prompt</th>
+                      <th class="py-2.5 px-3 text-right">Completion</th>
+                      <th class="py-2.5 px-3 text-right">Total Tokens</th>
+                      <th class="py-2.5 px-3 text-right">耗时</th>
+                      <th class="py-2.5 px-3 text-center">状态</th>
+                    </tr>
+                  </thead>
+                  <tbody id="logs-table-body" class="divide-y divide-slate-800/60">
+                    <tr><td colspan="9" class="text-center py-6 text-slate-500">暂无调用记录</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- 底部主页组件自定义编辑按钮 -->
+          <div class="flex justify-center pt-2 pb-4">
+            <button id="btn-open-widget-editor" type="button" class="glass-card px-6 py-2.5 rounded-xl border border-slate-700/80 hover:border-cyan-400 text-slate-200 hover:text-cyan-300 text-xs font-bold flex items-center gap-2.5 shadow-xl transition cursor-pointer">
+              <i class="fa-solid fa-sliders text-cyan-400"></i>
+              <span>自定义主页组件 (拖动排序 & 三档预设尺寸)</span>
+            </button>
+          </div>
+
+        </section>
+
+        <!-- ================= TAB: 上下信息流总管理 ================= -->
+        <section id="tab-flow" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-5">
+            <!-- 头部说明与过滤器 -->
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-800/80 pb-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-layer-group text-cyan-400"></i>
+                  <span>上下信息流总管理中心</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">聚合白名单群聊与私聊会话，支持独立模型分配、TTS覆盖、上下文分支管理与实时消息人工干预。</p>
+              </div>
+
+              <!-- 快捷筛选器 -->
+              <div class="flex items-center gap-2 flex-wrap">
+                <button type="button" class="flow-filter-btn active text-xs px-2.5 py-1.5 rounded-lg border border-cyan-500/40 bg-cyan-950/60 text-cyan-300" data-filter="all">全部</button>
+                <button type="button" class="flow-filter-btn text-xs px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200" data-filter="group">群聊</button>
+                <button type="button" class="flow-filter-btn text-xs px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200" data-filter="private">私聊</button>
+                <button type="button" class="flow-filter-btn text-xs px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200" data-filter="pinned"><i class="fa-solid fa-thumbtack text-amber-400 mr-1"></i>置顶</button>
+                <button type="button" class="flow-filter-btn text-xs px-2.5 py-1.5 rounded-lg border border-slate-800 bg-slate-900/60 text-slate-400 hover:text-slate-200" data-filter="fav"><i class="fa-solid fa-star text-amber-400 mr-1"></i>收藏</button>
+                <button id="btn-refresh-flow-sessions" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-arrows-rotate"></i>
+                  <span>刷新会话</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 会话选择卡片横向栏 -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-xs font-semibold text-slate-400">选择会话 (<span id="flow-session-count">0</span> 个)</span>
+                <input type="text" id="flow-search-input" placeholder="搜索群号/QQ/备注..." class="input-field max-w-xs text-xs py-1">
+              </div>
+              <div id="flow-sessions-list" class="flex gap-2.5 overflow-x-auto pb-2 scrollbar-thin">
+                <div class="text-xs text-slate-500 py-3">加载会话中...</div>
+              </div>
+            </div>
+
+            <!-- 双区面板 (左边设置区，右边聊天区) -->
+            <div id="flow-session-detail" class="grid grid-cols-1 lg:grid-cols-12 gap-5 pt-2">
+              
+              <!-- 左区: 会话设置区 (col-span-5) -->
+              <div class="lg:col-span-5 space-y-4">
+                <div class="bg-slate-900/80 p-4 rounded-xl border border-slate-800 space-y-4">
+                  <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+                    <div class="flex items-center gap-2">
+                      <span id="flow-target-badge" class="px-2 py-0.5 rounded text-[11px] font-bold bg-cyan-950 text-cyan-400 border border-cyan-800/50">群聊</span>
+                      <h4 id="flow-target-title" class="font-bold text-sm text-slate-100">未选择会话</h4>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <button id="btn-flow-toggle-pin" title="置顶" class="text-slate-400 hover:text-amber-400 transition p-1"><i class="fa-solid fa-thumbtack"></i></button>
+                      <button id="btn-flow-toggle-fav" title="收藏" class="text-slate-400 hover:text-amber-400 transition p-1"><i class="fa-regular fa-star"></i></button>
+                    </div>
+                  </div>
+
+                  <!-- 会话显示名称 -->
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-400 mb-1">会话显示备注名称</label>
+                    <input type="text" id="flow-cfg-display-name" class="input-field text-xs">
+                  </div>
+
+                  <!-- 自动聊天功能总开关 -->
+                  <div class="flex items-center justify-between p-3 rounded-lg bg-slate-950/60 border border-slate-800">
+                    <div>
+                      <div class="text-xs font-bold text-slate-200">LLM 自动聊天开关</div>
+                      <div class="text-[11px] text-slate-400">关闭后音理将保持安静待机（仍可响应指令及人工干预）</div>
+                    </div>
+                    <label class="relative inline-flex items-center cursor-pointer">
+                      <input type="checkbox" id="flow-cfg-chat-enabled" class="sr-only peer" checked>
+                      <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                    </label>
+                  </div>
+
+                  <!-- 独立模型设定 -->
+                  <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-300">使用对话模型 (LLM Model)</label>
+                    <select id="flow-cfg-model" class="input-field text-xs">
+                      <option value="">跟随全局主模型</option>
+                    </select>
+                  </div>
+
+                  <div class="space-y-2">
+                    <label class="block text-xs font-semibold text-slate-300">主动回复决策模型 (Decision Model)</label>
+                    <select id="flow-cfg-dec-model" class="input-field text-xs">
+                      <option value="">跟随全局决策模型</option>
+                    </select>
+                  </div>
+
+                  <!-- 独立 TTS 开关与模式 -->
+                  <div class="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-3">
+                    <div class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <i class="fa-solid fa-microphone text-cyan-400"></i>
+                      <span>独立语音配音 (TTS) 设定</span>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-2">
+                      <div>
+                        <label class="block text-[11px] text-slate-400 mb-1">TTS 开关</label>
+                        <select id="flow-cfg-tts-enabled" class="input-field text-xs">
+                          <option value="inherit">跟随全局设置</option>
+                          <option value="true">强制开启</option>
+                          <option value="false">强制关闭</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-[11px] text-slate-400 mb-1">配音输出模式</label>
+                        <select id="flow-cfg-tts-mode" class="input-field text-xs">
+                          <option value="inherit">跟随全局模式</option>
+                          <option value="simultaneous">同声传译(中字日音)</option>
+                          <option value="voice_only">纯语音回复</option>
+                          <option value="text_only">纯文本输出</option>
+                          <option value="text_and_voice">双轨同发</option>
+                        </select>
+                      </div>
+                      <div class="col-span-2">
+                        <label class="block text-[11px] text-slate-400 mb-1">配音目标语种</label>
+                        <select id="flow-cfg-tts-lang" class="input-field text-xs">
+                          <option value="inherit">跟随全局设置</option>
+                          <option value="zh">中文 (zh)</option>
+                          <option value="ja">日语 (ja)</option>
+                          <option value="en">英语 (en)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 限流设置 -->
+                  <div class="grid grid-cols-2 gap-2">
+                    <div>
+                      <label class="block text-[11px] font-semibold text-slate-300 mb-1">每分钟限流条数</label>
+                      <input type="number" id="flow-cfg-rate-limit" min="0" max="60" class="input-field text-xs" placeholder="0为不限制">
+                    </div>
+                    <div>
+                      <label class="block text-[11px] font-semibold text-slate-300 mb-1">回复冷却秒数</label>
+                      <input type="number" id="flow-cfg-cooldown" min="0" max="300" class="input-field text-xs" placeholder="0为无冷却">
+                    </div>
+                  </div>
+
+                  <!-- 上下文分支管理 -->
+                  <div class="p-3 rounded-lg bg-slate-950/60 border border-slate-800 space-y-2.5">
+                    <div class="flex items-center justify-between">
+                      <div class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-code-branch text-purple-400"></i>
+                        <span>记忆上下文分支管理</span>
+                      </div>
+                      <span id="flow-branch-active-label" class="text-[11px] text-purple-300 px-1.5 py-0.5 rounded bg-purple-950 border border-purple-800/60">当前: 默认上下文</span>
+                    </div>
+
+                    <div class="flex gap-1.5">
+                      <select id="flow-branches-select" class="input-field text-xs flex-1">
+                        <option value="1">序号 1: 默认上下文</option>
+                      </select>
+                      <button id="btn-flow-switch-branch" class="btn-secondary px-2.5 py-1 text-xs whitespace-nowrap">切换</button>
+                      <button id="btn-flow-delete-branch" class="btn-secondary px-2 py-1 text-xs text-rose-400 hover:text-rose-300" title="删除选定分支"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+
+                    <div class="flex gap-1.5 pt-1">
+                      <input type="text" id="flow-new-branch-name" placeholder="新上下文名称 (可选)" class="input-field text-xs flex-1">
+                      <button id="btn-flow-create-branch" class="btn-secondary px-2.5 py-1 text-xs whitespace-nowrap flex items-center gap-1">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>创建新记忆</span>
+                      </button>
+                    </div>
+
+                    <button id="btn-flow-clear-context" class="w-full text-xs py-1.5 rounded bg-rose-950/40 hover:bg-rose-900/50 text-rose-300 border border-rose-800/50 flex items-center justify-center gap-1.5 transition">
+                      <i class="fa-solid fa-broom"></i>
+                      <span>清空当前上下文历史</span>
+                    </button>
+                  </div>
+
+                  <button id="btn-save-flow-settings" class="btn-primary w-full py-2 text-xs flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                    <span>保存会话设置</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 右区: 实时消息聊天区与人工干预 (col-span-7) -->
+              <div class="lg:col-span-7 flex flex-col bg-slate-900/80 rounded-xl border border-slate-800 overflow-hidden" style="height: 680px;">
+                <!-- 聊天流头部 -->
+                <div class="px-4 py-3 bg-slate-950/70 border-b border-slate-800 flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></div>
+                    <span id="flow-chat-title" class="font-bold text-xs text-slate-200">群聊天流</span>
+                    <span id="flow-chat-msg-count" class="text-[10px] text-slate-400 px-1.5 py-0.5 rounded bg-slate-800">0 条消息</span>
+                  </div>
+                  <button id="btn-refresh-flow-chat" class="text-xs px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span>刷新消息</span>
+                  </button>
+                </div>
+
+                <!-- 消息滚动容器 -->
+                <div id="flow-chat-messages" class="flex-1 p-4 overflow-y-auto space-y-3 bg-slate-950/30">
+                  <div class="text-center text-xs text-slate-500 py-10">暂无上下文消息记录</div>
+                </div>
+
+                <!-- 人工干预发送框 -->
+                <div class="p-3 bg-slate-950/80 border-t border-slate-800 space-y-2">
+                  <div class="flex items-center justify-between text-[11px] text-slate-400">
+                    <div class="flex items-center gap-4">
+                      <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="flow-send-as-bot" class="w-3.5 h-3.5 rounded accent-cyan-400" checked>
+                        <span>作为音理发送(写入记忆)</span>
+                      </label>
+                      <label class="flex items-center gap-1.5 cursor-pointer">
+                        <input type="checkbox" id="flow-send-to-qq" class="w-3.5 h-3.5 rounded accent-cyan-400" checked>
+                        <span>同步推送至 QQ</span>
+                      </label>
+                    </div>
+                    <span class="text-[10px] text-cyan-400/80">按 Enter 发送，Shift+Enter 换行</span>
+                  </div>
+
+                  <div class="flex gap-2">
+                    <textarea id="flow-manual-input" rows="2" placeholder="输入人工干预消息内容..." class="input-field text-xs resize-none flex-1"></textarea>
+                    <button id="btn-flow-send-manual" class="btn-primary px-4 flex flex-col items-center justify-center gap-1 shrink-0">
+                      <i class="fa-solid fa-paper-plane text-xs"></i>
+                      <span class="text-[11px]">发送干预</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 2: LLM 多供应商与系统模型库 ================= -->
+        <section id="tab-llm" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
+            
+            <!-- 头部：多供应商配置模块 -->
+            <div>
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                <div>
+                  <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-server text-cyan-400"></i>
+                    <span>多供应商整合管理 (LLM Providers)</span>
+                  </h3>
+                  <p class="text-xs text-slate-400 mt-1">配置多个 OpenAI 兼容接口供应商（如 SiliconFlow、OpenAI、本地 Ollama、DeepSeek 等），支持独立拉取可用模型。</p>
+                </div>
+                <button id="btn-add-provider" class="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>添加供应商</span>
+                </button>
+              </div>
+
+              <!-- 供应商卡片列表 -->
+              <div id="providers-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-4">
+                <div class="text-xs text-slate-500 py-4 col-span-full">加载供应商中...</div>
+              </div>
+            </div>
+
+            <!-- 系统模型库 (System Model Hub) -->
+            <div class="border-t border-slate-800 pt-5">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                <div>
+                  <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-cube text-purple-400"></i>
+                    <span>系统模型库 (System Model Hub)</span>
+                  </h3>
+                  <p class="text-xs text-slate-400 mt-1">为模型打上专属 Tag（<code class="text-cyan-400">提供商/模型名称</code>），可配置默认温度、上下文轮数、单次Token以及多模态图/音/视传输开关。</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="btn-add-hub-model" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>手动添加模型</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 当前活跃模型指示条 -->
+              <div class="flex flex-wrap items-center gap-4 p-3 rounded-xl bg-slate-900/90 border border-slate-800 mb-4 text-xs">
+                <div class="flex items-center gap-2">
+                  <span class="text-slate-400">当前主聊天模型:</span>
+                  <span id="active-model-tag" class="px-2.5 py-0.5 rounded-full font-bold bg-cyan-950 text-cyan-300 border border-cyan-800/60">--</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span class="text-slate-400">当前决策研判模型:</span>
+                  <span id="active-decision-tag" class="px-2.5 py-0.5 rounded-full font-bold bg-purple-950 text-purple-300 border border-purple-800/60">--</span>
+                </div>
+              </div>
+
+              <!-- 模型库卡片/表格 -->
+              <div id="model-hub-list" class="space-y-3">
+                <div class="text-xs text-slate-500 py-4">加载模型库中...</div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ================= TAB 3: 本地TTS与同传 ================= -->
+        <section id="tab-tts" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
+            <div>
+              <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-headphones text-cyan-400"></i>
+                <span>本地 GPT-SoVITS 语音合成与同声传译设定</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">搭载已修复的 V4 LoRA + Base 底模架构，RTX 4060 GPU 毫秒级声学推理。</p>
+            </div>
+
+            <!-- GPT-SoVITS 本地服务与环境集成卡片 -->
+            <div class="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-4">
+              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                <div>
+                  <h4 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-server text-cyan-400"></i>
+                    <span>GPT-SoVITS 部署与服务集成</span>
+                  </h4>
+                  <p class="text-xs text-slate-400 mt-0.5">指定 GPT-SoVITS 根目录，一键安装跨域护航补丁并自动生成启动脚本，支持前端一键启停服务。</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  <span id="tts-service-status-badge" class="px-2.5 py-1 rounded-full text-xs font-bold bg-slate-800 text-slate-300 border border-slate-700 flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-500"></span>
+                    <span>检测中...</span>
+                  </span>
+                  <button id="btn-refresh-tts-status" class="p-1.5 text-xs text-slate-400 hover:text-slate-200 transition" title="刷新状态">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                  </button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">GPT-SoVITS 根目录路径</label>
+                  <div class="flex gap-2">
+                    <input type="text" id="cfg-gpt-sovits-dir" class="input-field flex-1 text-xs" placeholder="例如 D:\GPT-SoVITS\GPT-SoVITS-v2pro-20250604">
+                    <button id="btn-install-tts-patch" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 whitespace-nowrap bg-purple-900/60 hover:bg-purple-800 border-purple-700/60 text-purple-200">
+                      <i class="fa-solid fa-wrench"></i>
+                      <span>安装补丁与配置脚本</span>
+                    </button>
+                  </div>
+                  <p class="text-[11px] text-slate-400 mt-1">自动安装定制 `api_v2.py` (带 CORS 跨域与崩溃护航机制)，并同步生成 `start_tts.bat`。</p>
+                </div>
+
+                <div class="flex flex-col justify-end gap-2">
+                  <div class="flex gap-2">
+                    <button id="btn-start-tts-service" class="btn-primary flex-1 py-2 text-xs flex items-center justify-center gap-1.5 bg-emerald-600 hover:bg-emerald-500 border-emerald-500">
+                      <i class="fa-solid fa-play"></i>
+                      <span>一键启动 TTS</span>
+                    </button>
+                    <button id="btn-stop-tts-service" class="btn-secondary py-2 px-3 text-xs flex items-center justify-center gap-1.5 bg-rose-950/60 hover:bg-rose-900/80 border-rose-800/60 text-rose-300">
+                      <i class="fa-solid fa-stop"></i>
+                      <span>停止</span>
+                    </button>
+                  </div>
+                  <button id="btn-view-tts-logs" class="text-xs text-cyan-400 hover:underline flex items-center justify-center gap-1 py-0.5">
+                    <i class="fa-solid fa-terminal"></i>
+                    <span>查看运行日志</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 折叠的日志面板 -->
+              <div id="tts-logs-container" class="hidden mt-2 p-3 bg-slate-950/90 rounded-lg border border-slate-800 text-[11px] font-mono text-slate-300 max-h-48 overflow-y-auto whitespace-pre-wrap"></div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div class="flex items-center gap-2 md:col-span-2">
+                <input type="checkbox" id="cfg-tts-enabled" class="w-4 h-4 rounded accent-cyan-400" checked>
+                <label for="cfg-tts-enabled" class="text-xs font-semibold text-slate-200 cursor-pointer">全局启用语音合成 (TTS)</label>
+              </div>
+
+              <!-- GPT-SoVITS 核心模型权重配置 (方便自由更换模型与热切换) -->
+              <div class="p-4 rounded-xl bg-slate-900/90 border border-slate-700/80 space-y-3 md:col-span-2">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-800 pb-2">
+                  <div>
+                    <span class="text-xs font-bold text-slate-100 flex items-center gap-1.5">
+                      <i class="fa-solid fa-microchip text-purple-400"></i>
+                      <span>核心模型权重配置 (GPT & SoVITS Model Weights)</span>
+                    </span>
+                    <p class="text-[11px] text-slate-400 mt-0.5">可指定自训练或第三方微调角色模型路径，方便后期自由更换模型，服务运行期间可一键热切换生效。</p>
+                  </div>
+                  <button type="button" id="btn-apply-tts-weights" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 whitespace-nowrap bg-purple-950/70 hover:bg-purple-900 border-purple-700 text-purple-200" title="在线热切换已运行的 TTS 服务模型权重">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>热切换 / 应用权重</span>
+                  </button>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">GPT 模型权重路径 (.ckpt)</label>
+                    <input type="text" id="cfg-tts-gpt-weights" class="input-field text-xs font-mono" placeholder="如 D:\GPT-SoVITS\GPT-SoVITS-v2pro-20250604\GPT_weights_v4\inori_v4-e15.ckpt">
+                    <p class="text-[11px] text-slate-500 mt-1">负责文字特征转声学隐变量的 Text2Semantic 权重文件 (.ckpt)</p>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">SoVITS 扩散/声学生成权重路径 (.pth)</label>
+                    <input type="text" id="cfg-tts-sovits-weights" class="input-field text-xs font-mono" placeholder="如 D:\GPT-SoVITS\GPT-SoVITS-v2pro-20250604\SoVITS_weights_v4\inori_v4_e15_s1740_l32.pth">
+                    <p class="text-[11px] text-slate-500 mt-1">负责生成波形音色的 VITS 生成器权重文件 (.pth)</p>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">TTS API 地址</label>
+                <input type="text" id="cfg-tts-url" class="input-field" value="http://127.0.0.1:9880/tts">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">回复与配音模式 (TTS Mode)</label>
+                <select id="cfg-tts-mode" class="input-field">
+                  <option value="simultaneous">🌟 同声传译模式（输出中文文本 + 日语原声语音条）</option>
+                  <option value="text_and_voice">同文同音双轨（文本与语音语言一致）</option>
+                  <option value="voice_only">纯语音模式（仅发送语音条，不发文字）</option>
+                  <option value="text_only">纯文本模式（仅文字，不合成语音）</option>
+                </select>
+                <p class="text-[11px] text-cyan-400/80 mt-1">推荐「同声传译」，群友看懂中文字幕的同时听到音理本尊日文配音！</p>
+              </div>
+
+              <!-- 纯语音回复与语种选项 -->
+              <div class="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 space-y-3 md:col-span-2">
+                <div class="flex items-center justify-between">
+                  <div>
+                    <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                      <i class="fa-solid fa-microphone text-cyan-400"></i>
+                      <span>纯语音回复选项 (Voice-Only Mode)</span>
+                    </span>
+                    <p class="text-[11px] text-slate-400 mt-0.5">开启后音理将只输出语音条消息，不随带中文文字消息，提供纯粹听觉陪伴。</p>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="cfg-tts-voice-only-toggle" class="sr-only peer">
+                    <div class="w-9 h-5 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+                  </label>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1">纯语音/配音输出目标语种 (Target Output Language)</label>
+                    <select id="cfg-tts-text-lang" class="input-field text-xs">
+                      <option value="zh" selected>中文 (zh) - 默认推荐</option>
+                      <option value="ja">日语 (ja)</option>
+                      <option value="en">英语 (en)</option>
+                    </select>
+                    <p class="text-[11px] text-slate-500 mt-1">控制纯语音模式或同文同音时 TTS 语音合成目标语种（默认中文）</p>
+                  </div>
+                </div>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-300 mb-1">参考音频绝对路径 (Ref Audio Path)</label>
+                <input type="text" id="cfg-tts-ref-audio" class="input-field" value="D:\gal\二创素材提取\音理_日常参考音频\ner0092.wav">
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-300 mb-1">参考音频台词 (Prompt Text)</label>
+                <input type="text" id="cfg-tts-prompt-text" class="input-field" value="犬もいいけどね。今日は猫ちゃん見たから猫派。">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">参考音频语言</label>
+                <select id="cfg-tts-prompt-lang" class="input-field">
+                  <option value="ja">日语 (ja)</option>
+                  <option value="zh">中文 (zh)</option>
+                </select>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">配音语速因子 (Speed: <span id="val-tts-speed">1.0</span>)</label>
+                <input type="range" id="cfg-tts-speed" min="0.7" max="1.5" step="0.05" value="1.0" class="w-full accent-cyan-400">
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">OneBot11 语音传输格式</label>
+                <select id="cfg-tts-format" class="input-field">
+                  <option value="base64" selected>Base64 数据流 (推荐，全平台兼容 Docker)</option>
+                  <option value="file">本地文件协议 (file://URI - 仅限非Docker本机)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- 本地在线试听与测试 -->
+            <div class="border-t border-slate-800 pt-6">
+              <h4 class="text-sm font-bold text-slate-200 flex items-center gap-2 mb-2">
+                <i class="fa-solid fa-volume-high text-emerald-400"></i>
+                <span>本地 TTS 在线合成试听卡</span>
+              </h4>
+              <div class="flex gap-2">
+                <input type="text" id="tts-test-input" class="input-field flex-1" value="今日も一日お疲れ様！" placeholder="输入测试日语台词...">
+                <button id="btn-test-tts" class="btn-secondary px-4 flex items-center gap-2 whitespace-nowrap text-xs">
+                  <i class="fa-solid fa-play"></i>
+                  <span>合成并播放</span>
+                </button>
+              </div>
+              <div class="mt-3 hidden" id="tts-audio-player-container">
+                <audio id="tts-audio-player" controls class="w-full h-9 rounded"></audio>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-4">
+              <button id="btn-save-tts" class="btn-primary px-6 py-2.5 flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>保存 TTS 与同传设置</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 4: 白名单与管理员 ================= -->
+        <section id="tab-whitelist" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+              <div>
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-shield-halved text-cyan-400"></i>
+                  <span>访问控制、私聊/群聊白名单与管理员识别</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">管理员账号不受白名单限制，并可在聊天窗口直接使用管理指令。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <span id="whitelist-summary-badge" class="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-950/80 text-emerald-300 border border-emerald-800/60 flex items-center gap-1.5">
+                  <i class="fa-solid fa-shield-halved"></i>
+                  <span id="whitelist-summary-text">白名单双向防护生效中</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- 私聊白名单 -->
+            <div class="border border-slate-800 p-4 rounded-xl space-y-3 bg-slate-900/40">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-sm font-semibold text-slate-200">私聊白名单机制</h4>
+                    <span id="badge-priv-status" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60">已开启</span>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-0.5">开启后，仅白名单内的 QQ 好友可以与音理私聊对话</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="cfg-sec-priv-enable" class="sr-only peer">
+                  <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                </label>
+              </div>
+
+              <!-- 当前已生效的私聊QQ可视化芯片卡片 -->
+              <div class="bg-slate-950/60 border border-slate-800/80 p-3 rounded-lg space-y-2">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                  <span class="flex items-center gap-1.5"><i class="fa-solid fa-user-check text-cyan-400"></i>当前白名单私聊用户 (<span id="count-priv-users" class="font-mono text-cyan-300 font-bold">0</span> 人)：</span>
+                </div>
+                <div id="container-priv-chips" class="flex flex-wrap gap-2 text-xs">
+                  <span class="text-slate-500 italic text-[11px]">暂无私聊白名单号码</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">编辑私聊 QQ 列表 (用回车或逗号分隔)</label>
+                <textarea id="cfg-sec-priv-list" rows="3" class="input-field font-mono text-xs" placeholder="10001&#10;10002"></textarea>
+              </div>
+            </div>
+
+            <!-- 群聊白名单 -->
+            <div class="border border-slate-800 p-4 rounded-xl space-y-3 bg-slate-900/40">
+              <div class="flex items-center justify-between">
+                <div>
+                  <div class="flex items-center gap-2">
+                    <h4 class="text-sm font-semibold text-slate-200">群聊白名单机制</h4>
+                    <span id="badge-group-status" class="px-2 py-0.5 rounded text-[11px] font-semibold bg-emerald-950 text-emerald-300 border border-emerald-800/60">已开启</span>
+                  </div>
+                  <p class="text-xs text-slate-400 mt-0.5">开启后，音理只在列出的 QQ 群内响应或主动发言</p>
+                </div>
+                <label class="relative inline-flex items-center cursor-pointer">
+                  <input type="checkbox" id="cfg-sec-group-enable" class="sr-only peer">
+                  <div class="w-11 h-6 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-cyan-500"></div>
+                </label>
+              </div>
+
+              <!-- 当前已生效的群聊可视化芯片卡片 -->
+              <div class="bg-slate-950/60 border border-slate-800/80 p-3 rounded-lg space-y-2">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                  <span class="flex items-center gap-1.5"><i class="fa-solid fa-users text-indigo-400"></i>当前白名单群组 (<span id="count-group-chats" class="font-mono text-indigo-300 font-bold">0</span> 个群)：</span>
+                  <button type="button" id="btn-jump-to-flow" class="text-indigo-400 hover:text-indigo-300 underline inline-flex items-center gap-1 text-[11px]">
+                    <i class="fa-solid fa-arrow-up-right-from-square"></i>
+                    <span>前往信息流总览监控这些群聊</span>
+                  </button>
+                </div>
+                <div id="container-group-chips" class="flex flex-wrap gap-2 text-xs">
+                  <span class="text-slate-500 italic text-[11px]">暂无群聊白名单号码</span>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-xs text-slate-400 mb-1">编辑群号列表 (用回车或逗号分隔)</label>
+                <textarea id="cfg-sec-group-list" rows="3" class="input-field font-mono text-xs" placeholder="88888888&#10;99999999"></textarea>
+              </div>
+            </div>
+
+            <!-- 管理员账号 -->
+            <div class="border border-slate-800 p-4 rounded-xl space-y-3 bg-slate-900/40">
+              <div>
+                <h4 class="text-sm font-semibold text-purple-300 flex items-center gap-1.5">
+                  <i class="fa-solid fa-crown text-amber-400"></i>
+                  <span>超级管理员 QQ 列表</span>
+                </h4>
+                <p class="text-xs text-slate-400 mt-0.5">管理员享有全部白名单绕行特权，并可在聊天窗口使用 /admin reload 等指令</p>
+              </div>
+
+              <div class="bg-slate-950/60 border border-slate-800/80 p-3 rounded-lg space-y-2">
+                <div class="flex items-center justify-between text-xs text-slate-400">
+                  <span class="flex items-center gap-1.5"><i class="fa-solid fa-shield-cat text-amber-400"></i>当前管理员 (<span id="count-admin-users" class="font-mono text-amber-300 font-bold">0</span> 人)：</span>
+                </div>
+                <div id="container-admin-chips" class="flex flex-wrap gap-2 text-xs">
+                  <span class="text-slate-500 italic text-[11px]">暂无管理员QQ</span>
+                </div>
+              </div>
+
+              <div>
+                <textarea id="cfg-sec-admin-list" rows="2" class="input-field font-mono text-xs" placeholder="你的个人QQ号"></textarea>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-2">
+              <button id="btn-save-security" class="btn-primary px-6 py-2.5 flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>保存权限与白名单配置</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB: 人物识别与身份绑定 ================= -->
+        <section id="tab-identities" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
+            <div>
+              <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-id-card text-cyan-400"></i>
+                <span>人物识别与身份绑定</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">为指定的 QQ 账号配置身份标签、备注称呼与个性备忘，引导模型在交互对话中自适应认人与互动。</p>
+            </div>
+
+            <!-- 主人/核心主角配置 -->
+            <div class="border border-cyan-800/60 p-4 rounded-xl space-y-2 bg-cyan-950/20">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-bold text-cyan-300 flex items-center gap-2">
+                    <i class="fa-solid fa-heart text-rose-400"></i>
+                    <span>核心管理者账号 (Master ID)</span>
+                  </h4>
+                  <p class="text-xs text-slate-400">设定最高权限交互账号。留空或为 0 时，默认将管理员列表中的账号作为主交互者。</p>
+                </div>
+                <div class="w-48">
+                  <input type="number" id="cfg-identity-master-qq" class="input-field font-mono text-center" placeholder="主交互账号 QQ">
+                </div>
+              </div>
+            </div>
+
+            <!-- 添加/编辑绑定卡片 -->
+            <div class="border border-slate-800 p-4 rounded-xl space-y-3 bg-slate-900/40">
+              <h4 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-user-plus text-sky-400"></i>
+                <span>添加新的人物身份标签绑定</span>
+              </h4>
+              <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">目标 QQ 号 *</label>
+                  <input type="number" id="new-id-qq" class="input-field font-mono text-xs" placeholder="例如: 12345678" required>
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">备注称呼昵称 *</label>
+                  <input type="text" id="new-id-nickname" class="input-field text-xs" placeholder="例如: 晓哥 / 真白 / 小林">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">身份定位标签 *</label>
+                  <input type="text" id="new-id-tag" class="input-field text-xs" placeholder="例如: 管理员, 核心搭档, 创作者">
+                </div>
+                <div class="flex flex-col justify-end">
+                  <label class="flex items-center gap-2 text-xs text-slate-300 pb-2 cursor-pointer">
+                    <input type="checkbox" id="new-id-ismaster" class="w-4 h-4 rounded accent-cyan-400">
+                    <span>设为核心交互对象</span>
+                  </label>
+                </div>
+                <div class="lg:col-span-3">
+                  <label class="block text-xs text-slate-400 mb-1">专属备忘设定（大模型提示词可见，可指导交流话题与好感度）</label>
+                  <input type="text" id="new-id-notes" class="input-field text-xs" placeholder="例如: 专属互动备忘、习惯或话题倾向">
+                </div>
+                <div class="flex items-end">
+                  <button type="button" id="btn-add-identity" class="btn-primary w-full py-2 text-xs flex items-center justify-center gap-1.5">
+                    <i class="fa-solid fa-plus"></i>
+                    <span>添加/更新绑定</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 已绑定人物列表表单 -->
+            <div class="space-y-2">
+              <div class="flex items-center justify-between">
+                <h4 class="text-sm font-semibold text-slate-200">当前已生效的身份标签库</h4>
+                <button type="button" id="btn-save-identities-all" class="btn-secondary px-3 py-1 text-xs">
+                  <i class="fa-solid fa-floppy-disk mr-1"></i>保存身份绑定
+                </button>
+              </div>
+              <div class="overflow-x-auto rounded-xl border border-slate-800">
+                <table class="w-full text-xs text-left text-slate-300">
+                  <thead class="text-[11px] uppercase bg-slate-900 text-slate-400 border-b border-slate-800">
+                    <tr>
+                      <th class="py-2.5 px-3">QQ号</th>
+                      <th class="py-2.5 px-3">称呼昵称</th>
+                      <th class="py-2.5 px-3">身份标签</th>
+                      <th class="py-2.5 px-3">专属备忘设定</th>
+                      <th class="py-2.5 px-3 text-center">角色判定</th>
+                      <th class="py-2.5 px-3 text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="identities-table-body" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                    <tr><td colspan="6" class="text-center py-6 text-slate-500">暂无身份绑定，所有群友将默认按普通朋友交流</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB: 记忆系统与知识图谱 ================= -->
+        <section id="tab-memory" class="tab-pane space-y-6">
+          
+          <!-- 1. 顶部状态指标与监测栏 -->
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-network-wired text-cyan-400"></i>
+                  <span>Neri Memory OS 运行状态与指标监测</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">集成 ChromaDB 语义向量库、bge-small-zh-v1.5 本地离线嵌入及艾宾浩斯遗忘曲线引擎。</p>
+              </div>
+              <div class="flex items-center gap-2 self-end sm:self-auto flex-wrap">
+                <button id="btn-mem-export" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 text-emerald-400 border-emerald-800/60 hover:bg-emerald-950/40" title="打包导出全部记忆库文件为 ZIP (包含 JSON 数组、CSV 表格与元数据)">
+                  <i class="fa-solid fa-file-zipper"></i>
+                  <span>导出记忆库 (ZIP)</span>
+                </button>
+                <button id="btn-mem-reset-factory" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 text-rose-400 border-rose-800/60 hover:bg-rose-950/40" title="擦除全部记忆还原至出厂设置并自动初始化">
+                  <i class="fa-solid fa-rotate-left"></i>
+                  <span>恢复出厂设置</span>
+                </button>
+                <button id="btn-mem-selftest" class="btn-secondary px-3.5 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-stethoscope text-cyan-400"></i>
+                  <span>全链路自检</span>
+                </button>
+                <button id="btn-mem-refresh" class="btn-primary px-3.5 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate"></i>
+                  <span>刷新数据</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 4 个状态卡片 -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
+              <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-slate-400 font-medium">运行状态</span>
+                  <span id="mem-status-badge" class="px-2 py-0.5 rounded text-[11px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800 flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                    <span>正常就绪</span>
+                  </span>
+                </div>
+                <div id="mem-status-channels" class="text-[11px] text-slate-400 truncate">元数据、离线向量、ANN检索、遗忘引擎</div>
+              </div>
+
+              <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-slate-400 font-medium">Embedding 维度</span>
+                  <span id="mem-dim-val" class="font-mono text-sm font-bold text-cyan-300">512 维</span>
+                </div>
+                <div id="mem-model-val" class="text-[11px] text-slate-400 truncate">bge-small-zh-v1.5 (本地离线)</div>
+              </div>
+
+              <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-slate-400 font-medium">向量库引擎</span>
+                  <span id="mem-col-val" class="text-[11px] font-bold text-indigo-300 font-mono">neri_memories</span>
+                </div>
+                <div id="mem-integrity-val" class="text-[11px] text-slate-400 truncate">ChromaDB 持久化存储 (已验证)</div>
+              </div>
+
+              <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-1.5">
+                <div class="flex items-center justify-between">
+                  <span class="text-xs text-slate-400 font-medium">记忆碎片规模</span>
+                  <span id="mem-total-val" class="font-mono text-sm font-bold text-amber-300">-- 条</span>
+                </div>
+                <div id="mem-detail-counts" class="text-[11px] text-slate-400 truncate">活跃: -- | 事实: -- | 情景: -- | 用户: --</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 2. 快速开始推荐卡片 -->
+          <div id="mem-quick-start-box" class="glass-card p-5 rounded-2xl border border-slate-800 relative transition-all">
+            <button id="btn-close-mem-quickstart" class="absolute top-4 right-4 text-slate-500 hover:text-slate-300 transition text-sm">
+              <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div class="flex items-center gap-2 mb-3">
+              <span class="text-sm font-bold text-slate-100">快速开始：先从这三件事入手</span>
+              <span class="text-[11px] text-slate-400">挑选常用快捷入口，探索音理的长短期记忆认知系统</span>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div id="card-qs-add" class="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-cyan-500/50 hover:bg-slate-900 transition cursor-pointer flex items-start gap-3 group">
+                <div class="w-9 h-9 rounded-lg bg-cyan-950/80 border border-cyan-800/80 flex items-center justify-center shrink-0 text-cyan-400 group-hover:scale-105 transition">
+                  <i class="fa-solid fa-file-import"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-200 group-hover:text-cyan-300 transition">手动录入资料</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">向记忆库写入专属设定、事件或个性化备忘</div>
+                </div>
+              </div>
+
+              <div id="card-qs-sim" class="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-amber-500/50 hover:bg-slate-900 transition cursor-pointer flex items-start gap-3 group">
+                <div class="w-9 h-9 rounded-lg bg-amber-950/80 border border-amber-800/80 flex items-center justify-center shrink-0 text-amber-400 group-hover:scale-105 transition">
+                  <i class="fa-solid fa-sliders"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-200 group-hover:text-amber-300 transition">检索调优与模拟</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">测试 Query 语义召回，分析余弦相似度与艾宾浩斯衰减打分</div>
+                </div>
+              </div>
+
+              <div id="card-qs-graph" class="p-3.5 rounded-xl bg-slate-900/70 border border-slate-800 hover:border-indigo-500/50 hover:bg-slate-900 transition cursor-pointer flex items-start gap-3 group">
+                <div class="w-9 h-9 rounded-lg bg-indigo-950/80 border border-indigo-800/80 flex items-center justify-center shrink-0 text-indigo-400 group-hover:scale-105 transition">
+                  <i class="fa-solid fa-circle-nodes"></i>
+                </div>
+                <div>
+                  <div class="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition">打开记忆图谱</div>
+                  <div class="text-[11px] text-slate-400 mt-0.5">以粒子力导向网络直观交互已存实体与关系群</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 3. 主操作面板与功能子视图容器 -->
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+            
+            <!-- 子标签栏 + 快捷动作工具栏 -->
+            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+              <div class="flex items-center gap-1.5 flex-wrap">
+                <button class="mem-subtab-btn active px-3 py-1.5 rounded-lg text-xs font-semibold bg-cyan-950 border border-cyan-800 text-cyan-300 transition" data-subtab="mem-view-graph">
+                  <i class="fa-solid fa-circle-nodes mr-1.5"></i>记忆图谱
+                </button>
+                <button class="mem-subtab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition" data-subtab="mem-view-timeline">
+                  <i class="fa-solid fa-timeline mr-1.5"></i>审计时间线
+                </button>
+                <button class="mem-subtab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition" data-subtab="mem-view-sim">
+                  <i class="fa-solid fa-magnifying-glass-chart mr-1.5"></i>检索调优
+                </button>
+                <button class="mem-subtab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition" data-subtab="mem-view-facts">
+                  <i class="fa-solid fa-lightbulb mr-1.5"></i>核心事实 (<span id="count-subtab-facts">0</span>)
+                </button>
+                <button class="mem-subtab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition" data-subtab="mem-view-episodes">
+                  <i class="fa-solid fa-comment-dots mr-1.5"></i>情景记忆 (<span id="count-subtab-episodes">0</span>)
+                </button>
+                <button class="mem-subtab-btn px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-900 border border-slate-800 text-slate-400 hover:text-slate-200 transition" data-subtab="mem-view-archive">
+                  <i class="fa-solid fa-box-archive mr-1.5"></i>遗忘归档 (<span id="count-subtab-archive">0</span>)
+                </button>
+              </div>
+
+              <!-- 右侧动作 -->
+              <div class="flex items-center gap-2">
+                <button id="btn-mem-add-manual" class="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-plus"></i>
+                  <span>录入记忆</span>
+                </button>
+                <button id="btn-mem-forget-run" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 text-amber-300 hover:text-amber-200" title="执行时间衰减与艾宾浩斯遗忘扫描">
+                  <i class="fa-solid fa-hourglass-half"></i>
+                  <span>衰减修护</span>
+                </button>
+                <button id="btn-mem-clear-test-data" class="px-2.5 py-1.5 text-xs rounded-lg border border-slate-800 text-slate-500 hover:text-rose-400 hover:border-rose-900/60 transition" title="清除测试记忆碎片">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- 子视图 1: 记忆图谱 -->
+            <div id="mem-view-graph" class="mem-view-pane space-y-3">
+              <!-- 图谱操作条 -->
+              <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-xs">
+                <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-1.5 text-slate-300 font-semibold">
+                    <span class="px-2 py-0.5 rounded bg-cyan-950 text-cyan-300 border border-cyan-800/60 text-[11px]" id="graph-stat-nodes">节点: 0</span>
+                    <span class="px-2 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800/60 text-[11px]" id="graph-stat-links">关系: 0</span>
+                  </div>
+                  <div class="hidden md:flex items-center gap-3 text-[11px] text-slate-400">
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-cyan-400 inline-block"></span>事实 (Fact)</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-indigo-400 inline-block"></span>情景 (Episode)</span>
+                    <span class="flex items-center gap-1"><span class="w-2.5 h-2.5 rounded-full bg-slate-500 inline-block"></span>已遗忘</span>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2">
+                  <div class="relative flex-1 sm:w-64">
+                    <input type="text" id="mem-graph-search-input" placeholder="搜索实体、关系、内容..." class="input-field py-1 text-xs pl-8 pr-3">
+                    <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-2 text-slate-500 text-xs"></i>
+                  </div>
+                  <select id="mem-graph-limit-select" class="input-field py-1 text-xs w-28">
+                    <option value="50">显示 50 节点</option>
+                    <option value="120" selected>显示 120 节点</option>
+                    <option value="200">显示 200 节点</option>
+                  </select>
+                  <button id="btn-refresh-graph" class="btn-secondary px-2.5 py-1 text-xs shrink-0" title="重新布局与渲染">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                  </button>
+                </div>
+              </div>
+
+              <!-- HTML5 交互式 Canvas 画布 -->
+              <div class="relative rounded-2xl overflow-hidden border border-slate-800/80 bg-slate-950/70 shadow-inner">
+                <canvas id="mem-graph-canvas" class="w-full h-[360px] sm:h-[460px] md:h-[520px] block cursor-grab active:cursor-grabbing"></canvas>
+                <div id="mem-graph-tooltip" class="absolute hidden pointer-events-none z-30 p-2.5 rounded-xl bg-slate-900/95 border border-cyan-500/40 text-xs text-slate-200 shadow-xl max-w-xs backdrop-blur-md space-y-1"></div>
+                <div class="absolute bottom-3 right-3 text-[10px] text-slate-500 bg-slate-900/80 px-2 py-1 rounded border border-slate-800 pointer-events-none">
+                  提示: 拖拽画布平移，点击/悬浮节点可查看与编辑
+                </div>
+              </div>
+            </div>
+
+            <!-- 子视图 2: 审计时间线 -->
+            <div id="mem-view-timeline" class="mem-view-pane hidden space-y-3">
+              <div class="p-3 bg-slate-900/50 rounded-xl border border-slate-800 text-xs text-slate-400 flex items-center justify-between">
+                <span>按发生与提取时间顺序排列的长远记忆演化流水，包含沉淀率与访问权重</span>
+                <span id="timeline-count-badge" class="font-bold text-slate-200">共 0 条</span>
+              </div>
+              <div id="mem-timeline-container" class="relative pl-6 space-y-4 border-l-2 border-slate-800 ml-4 py-2 max-h-[600px] overflow-y-auto pr-2">
+                <!-- 动态填充时间轴节点 -->
+              </div>
+            </div>
+
+            <!-- 子视图 3: 检索调优与召回模拟 -->
+            <div id="mem-view-sim" class="mem-view-pane hidden space-y-4">
+              <div class="p-4 rounded-xl bg-slate-900/60 border border-slate-800 space-y-3">
+                <div class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                  <i class="fa-solid fa-sliders text-amber-400"></i>
+                  <span>语义检索模拟与权重调试器</span>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                  <div>
+                    <label class="text-[11px] text-slate-400 block mb-1">测试针对对象 (QQ号，0为全局)</label>
+                    <input type="number" id="sim-input-qq" value="0" class="input-field py-1.5 text-xs">
+                  </div>
+                  <div>
+                    <label class="text-[11px] text-slate-400 block mb-1">召回数量 (Top-K)</label>
+                    <input type="number" id="sim-input-topk" value="5" min="1" max="20" class="input-field py-1.5 text-xs">
+                  </div>
+                  <div>
+                    <label class="text-[11px] text-slate-400 block mb-1">语义相似度权重 (当前: <span id="val-sim-weight">0.7</span>)</label>
+                    <input type="range" id="sim-range-weight" min="0" max="1" step="0.05" value="0.7" class="w-full mt-2 accent-cyan-400">
+                  </div>
+                  <div>
+                    <label class="text-[11px] text-slate-400 block mb-1">时间衰减因子 (当前: <span id="val-sim-decay">0.1</span>)</label>
+                    <input type="range" id="sim-range-decay" min="0.01" max="0.5" step="0.01" value="0.1" class="w-full mt-2 accent-amber-400">
+                  </div>
+                </div>
+                <div class="flex items-center gap-2 pt-1">
+                  <input type="text" id="sim-input-query" placeholder="输入测试提问或上下文，例如: 用户的喜好或近期日常约定" class="input-field py-1.5 text-xs flex-1">
+                  <button id="btn-run-sim-retrieval" class="btn-primary px-4 py-1.5 text-xs shrink-0 flex items-center gap-1.5">
+                    <i class="fa-solid fa-play"></i>
+                    <span>执行模拟召回</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- 模拟结果表格 -->
+              <div class="rounded-xl border border-slate-800 overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                  <thead class="bg-slate-900/90 text-slate-400 uppercase text-[10px] font-mono border-b border-slate-800">
+                    <tr>
+                      <th class="py-2.5 px-3 text-center w-12">排序</th>
+                      <th class="py-2.5 px-3 min-w-[200px]">记忆内容</th>
+                      <th class="py-2.5 px-3 w-20 text-center">分类</th>
+                      <th class="py-2.5 px-3 w-20 text-center">余弦距离</th>
+                      <th class="py-2.5 px-3 w-20 text-center">相似度分</th>
+                      <th class="py-2.5 px-3 w-20 text-center">留存率分</th>
+                      <th class="py-2.5 px-3 w-24 text-center font-bold text-cyan-300">综合得分</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sim-results-body" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                    <tr><td colspan="7" class="text-center py-8 text-slate-500">请输入查询 Query 并点击【执行模拟召回】</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 子视图 4: 核心事实 (Facts Table) -->
+            <div id="mem-view-facts" class="mem-view-pane hidden space-y-3">
+              <div class="rounded-xl border border-slate-800 overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                  <thead class="bg-slate-900/90 text-slate-400 text-[11px] border-b border-slate-800">
+                    <tr>
+                      <th class="py-2.5 px-3 w-28">所属用户</th>
+                      <th class="py-2.5 px-3 min-w-[220px]">核心事实内容</th>
+                      <th class="py-2.5 px-3 w-20 text-center">重要度</th>
+                      <th class="py-2.5 px-3 w-24 text-center">留存率</th>
+                      <th class="py-2.5 px-3 w-24 text-center">记录时间</th>
+                      <th class="py-2.5 px-3 w-28 text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mem-facts-tbody" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                    <tr><td colspan="6" class="text-center py-8 text-slate-500">加载中...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 子视图 5: 情景记忆 (Episodes Table) -->
+            <div id="mem-view-episodes" class="mem-view-pane hidden space-y-3">
+              <div class="rounded-xl border border-slate-800 overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                  <thead class="bg-slate-900/90 text-slate-400 text-[11px] border-b border-slate-800">
+                    <tr>
+                      <th class="py-2.5 px-3 w-28">所属用户</th>
+                      <th class="py-2.5 px-3 min-w-[220px]">情景事件内容</th>
+                      <th class="py-2.5 px-3 w-20 text-center">重要度</th>
+                      <th class="py-2.5 px-3 w-20 text-center">访问次数</th>
+                      <th class="py-2.5 px-3 w-24 text-center">记录时间</th>
+                      <th class="py-2.5 px-3 w-28 text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mem-episodes-tbody" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                    <tr><td colspan="6" class="text-center py-8 text-slate-500">加载中...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <!-- 子视图 6: 遗忘归档 (Archive Table) -->
+            <div id="mem-view-archive" class="mem-view-pane hidden space-y-3">
+              <div class="rounded-xl border border-slate-800 overflow-x-auto">
+                <table class="w-full text-xs text-left">
+                  <thead class="bg-slate-900/90 text-slate-400 text-[11px] border-b border-slate-800">
+                    <tr>
+                      <th class="py-2.5 px-3 w-28">所属用户</th>
+                      <th class="py-2.5 px-3 min-w-[220px]">归档记忆碎片</th>
+                      <th class="py-2.5 px-3 w-20 text-center">分类</th>
+                      <th class="py-2.5 px-3 w-20 text-center">原始权重</th>
+                      <th class="py-2.5 px-3 w-28 text-center">操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="mem-archive-tbody" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                    <tr><td colspan="5" class="text-center py-8 text-slate-500">暂无被遗忘归档的记忆碎片</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ================= TAB: 白名单群聊历史消息日志 ================= -->
+        <section id="tab-grouplogs" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-book-open text-cyan-400"></i>
+                  <span>白名单群组全量消息流水日志</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">自动记录白名单群聊内的每一条群友发言与音理的回复内容，支持按群号或关键词精确检索。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button type="button" id="btn-clear-grouplogs" class="text-xs text-rose-400 hover:text-rose-300 px-3 py-1.5 transition">
+                  <i class="fa-solid fa-trash mr-1"></i>清空群日志
+                </button>
+                <button type="button" id="btn-refresh-grouplogs" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate-right"></i>
+                  <span>刷新日志</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 检索过滤器 -->
+            <div class="flex flex-wrap items-center gap-3 bg-slate-900/60 p-3 rounded-xl border border-slate-800 text-xs">
+              <div class="flex items-center gap-1.5">
+                <span class="text-slate-400 font-semibold">群号过滤:</span>
+                <input type="number" id="filter-grouplog-gid" class="input-field w-36 py-1 text-xs" placeholder="全部群聊">
+              </div>
+              <div class="flex items-center gap-1.5 flex-1 min-w-[200px]">
+                <span class="text-slate-400 font-semibold">内容搜索:</span>
+                <input type="text" id="filter-grouplog-kw" class="input-field py-1 text-xs" placeholder="输入发言内容或群友昵称关键词...">
+              </div>
+              <button type="button" id="btn-search-grouplogs" class="btn-primary px-4 py-1.5 text-xs flex items-center gap-1">
+                <i class="fa-solid fa-magnifying-glass"></i>
+                <span>检索</span>
+              </button>
+            </div>
+
+            <!-- 群消息日志表格 -->
+            <div class="overflow-x-auto rounded-xl border border-slate-800">
+              <table class="w-full text-xs text-left text-slate-300">
+                <thead class="text-[11px] uppercase bg-slate-900 text-slate-400 border-b border-slate-800">
+                  <tr>
+                    <th class="py-2.5 px-3 w-28">时间</th>
+                    <th class="py-2.5 px-3 w-28">群号</th>
+                    <th class="py-2.5 px-3 w-36">发言人</th>
+                    <th class="py-2.5 px-3">群消息内容</th>
+                    <th class="py-2.5 px-3 w-80">音理的应答内容</th>
+                  </tr>
+                </thead>
+                <tbody id="grouplogs-table-body" class="divide-y divide-slate-800/60 bg-slate-950/40">
+                  <tr><td colspan="5" class="text-center py-8 text-slate-500">暂无群消息记录</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+        <section id="tab-commands" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
+            <div>
+              <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-terminal text-cyan-400"></i>
+                <span>聊天内快速指令 & 群聊主动回复决策</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">管理群内唤醒逻辑、上下文清空指令与决策模型主动插话判定。</p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">自定义指令前缀</label>
+                <input type="text" id="cfg-cmd-prefix" class="input-field" value="/" placeholder="/">
+                <p class="text-[11px] text-slate-500 mt-1">如输入 /reset 或 #reset</p>
+              </div>
+
+              <div>
+                <label class="block text-xs font-semibold text-slate-300 mb-1">群聊唤醒词列表（逗号分隔）</label>
+                <input type="text" id="cfg-cmd-wake-words" class="input-field" value="音理,ねり,音理酱">
+                <p class="text-[11px] text-slate-500 mt-1">在群内除了@机器人，以此词开头也会触发回复</p>
+              </div>
+
+              <div class="space-y-1 md:col-span-2">
+                <div class="flex items-center gap-2">
+                  <input type="checkbox" id="cfg-cmd-require-wake" class="w-4 h-4 rounded accent-cyan-400" checked>
+                  <label for="cfg-cmd-require-wake" class="text-xs text-slate-300 cursor-pointer">群聊必须有@或唤醒词才进行常规对话（推荐勾选，防过度插话）</label>
+                </div>
+                <p class="text-[11px] text-amber-400/90 ml-6">💡 提示：开启白名单后，白名单群内的全部消息均会被完整记录进【群聊日志】；但常规对话触发需 @机器人 或发言包含唤醒词（音理/ねり/音理酱）。若希望白名单群内任意发言机器人均自动应答，可关闭此项或开启下方【主动回复】。</p>
+              </div>
+
+              <div class="md:col-span-2">
+                <details class="group bg-slate-900/50 border border-slate-800 rounded-lg p-3">
+                  <summary class="flex justify-between items-center font-semibold cursor-pointer text-slate-300 text-sm">
+                    <span>可用指令管理（点击展开）</span>
+                    <span class="transition group-open:rotate-180">
+                      <i class="fa-solid fa-chevron-down"></i>
+                    </span>
+                  </summary>
+                  <div class="mt-3 grid grid-cols-2 md:grid-cols-4 gap-3 text-xs text-slate-300">
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-reset" checked> /reset (清空记忆)</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-help" checked> /help (指令菜单)</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-status" checked> /status (运行状态)</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-new" checked> /new (新建/切换)</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-chatlist" checked> /chatlist (上下文)</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-model" checked> /model (模型切换)</label>
+                    <label class="flex items-center gap-1.5"><input type="checkbox" id="cfg-cmd-en-chat-onoff" checked> /chat on/off (开关)</label>
+                  </div>
+                </details>
+              </div>
+            </div>
+
+            <!-- 主动回复决策模块 -->
+            <div class="border-t border-slate-800 pt-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+                    <i class="fa-solid fa-wand-magic text-purple-400"></i>
+                    <span>群聊主动回复功能 (Proactive Chat)</span>
+                  </h4>
+                  <p class="text-xs text-slate-400">后台自动审阅未@机器人的群聊闲聊并插话</p>
+                </div>
+                <input type="checkbox" id="cfg-act-enabled" class="w-5 h-5 rounded accent-cyan-400" checked>
+              </div>
+
+              <div class="md:col-span-2 mt-2">
+                <label class="block text-xs font-semibold text-slate-300 mb-1">主动回复生效群白名单（逗号分隔群号）</label>
+                <div id="cfg-act-whitelist-container" class="grid grid-cols-2 sm:grid-cols-3 gap-2 border border-slate-800 bg-slate-900/60 p-3 rounded-lg max-h-40 overflow-y-auto scrollbar-thin">
+                  <div class="text-xs text-slate-500">正在加载群组...</div>
+                </div>
+                <p class="text-[11px] text-slate-500 mt-1">仅在此名单内的群聊会触发主动回复，且群必须在全局白名单中。</p>
+              </div>
+
+              <div class="md:col-span-2">
+                <label class="block text-xs font-semibold text-slate-300 mb-2">主动回复策略 (二选一)</label>
+                <div class="flex items-center gap-4 text-xs text-slate-300 mb-3">
+                  <label class="flex items-center gap-1.5">
+                    <input type="radio" name="act_strategy" value="decision_model" id="cfg-act-strat-model" class="accent-cyan-400" checked> 
+                    决策模型评估
+                  </label>
+                  <label class="flex items-center gap-1.5">
+                    <input type="radio" name="act_strategy" value="probability" id="cfg-act-strat-prob" class="accent-cyan-400"> 
+                    自定义概率随机回复
+                  </label>
+                </div>
+              </div>
+
+              <!-- 策略选项区 -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4" id="act-strat-model-options">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">决策触发频率 (每 N 条群消息判断一次)</label>
+                  <input type="number" id="cfg-act-frequency" class="input-field" value="5" min="1" max="50">
+                  <p class="text-[11px] text-slate-500 mt-1">建议 5~10，避免频繁请求决策大模型</p>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">决策模型置信度阈值 (<span id="val-act-conf">0.7</span>)</label>
+                  <input type="range" id="cfg-act-conf" min="0.3" max="0.95" step="0.05" value="0.7" class="w-full accent-cyan-400">
+                  <p class="text-[11px] text-slate-500 mt-1">高于此阈值时音理才会主动开口</p>
+                </div>
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">提交上下文行数</label>
+                  <input type="number" id="cfg-act-context" class="input-field" value="8" min="3" max="20">
+                  <p class="text-[11px] text-slate-500 mt-1">供决策模型评估的最近群聊记录条数</p>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-4 hidden" id="act-strat-prob-options">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">随机触发概率 (0.0~1.0)</label>
+                  <input type="number" id="cfg-act-prob" class="input-field" value="0.05" step="0.01" min="0" max="1">
+                  <p class="text-[11px] text-slate-500 mt-1">例如 0.05 表示 5% 的概率回复每一条消息</p>
+                </div>
+              </div>
+            </div>
+
+            <div class="flex justify-end pt-4">
+              <button id="btn-save-commands" class="btn-primary px-6 py-2.5 flex items-center gap-2">
+                <i class="fa-solid fa-floppy-disk"></i>
+                <span>保存指令与主动回复策略</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 6: 人格提示词 (系统) ================= -->
+        <section id="tab-persona" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+              <div>
+                <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                  <i class="fa-solid fa-book-bookmark text-cyan-400"></i>
+                  <span>默认规范模块化提示词包管理</span>
+                </h3>
+                <p class="text-xs text-slate-400 mt-1">完全遵循 master.yaml 组织结构，严格规范角色、世界观、安全约定与双轨同传。</p>
+              </div>
+              <div class="flex items-center gap-2">
+                <button id="btn-reload-prompts" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-rotate"></i>
+                  <span>热重载生效</span>
+                </button>
+                <button id="btn-save-prompt-file" class="btn-primary px-4 py-1.5 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  <span>保存当前文件</span>
+                </button>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <!-- 文件选择列表 -->
+              <div class="md:col-span-1 space-y-1 bg-slate-900/60 p-2.5 rounded-xl border border-slate-800 max-h-[500px] overflow-y-auto" id="prompt-file-list">
+                <div class="text-xs text-slate-400 px-2 py-1">加载提示词模块...</div>
+              </div>
+
+              <!-- 编辑器区 -->
+              <div class="md:col-span-3">
+                <div class="flex items-center justify-between bg-slate-900 px-3 py-1.5 rounded-t-xl border-t border-x border-slate-800 text-xs font-mono text-cyan-300">
+                  <span id="current-prompt-filename">master.yaml</span>
+                  <span class="text-[11px] text-slate-500">UTF-8 Markdown / YAML</span>
+                </div>
+                <textarea id="prompt-file-content" rows="20" class="input-field rounded-t-none font-mono text-xs leading-relaxed"></textarea>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB 7: 在线调优沙盒 ================= -->
+        <section id="tab-sandbox" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-4">
+            <div>
+              <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-comments text-cyan-400"></i>
+                <span>Neri聊天</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">无需打开QQ，直接在此向音理发送消息，实时测试提示词、同传配音与 Token 消耗。</p>
+            </div>
+
+            <!-- Neri 聊天独立临时配置工具栏 (仅本页生效不同步全局) -->
+            <div class="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800/80 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div class="flex flex-wrap items-center gap-3">
+                <!-- 模型切换 -->
+                <div class="flex items-center gap-1.5">
+                  <span class="text-slate-400 font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-microchip text-cyan-400"></i>模型:
+                  </span>
+                  <select id="sandbox-model-select" class="input-field py-1 px-2.5 text-xs bg-slate-950/80 border-slate-700/80 max-w-[180px] sm:max-w-[220px] truncate" title="仅本页面聊天生效，不同步全局主模型">
+                    <option value="">跟随主模型</option>
+                  </select>
+                </div>
+
+                <!-- 温度调节 -->
+                <div class="flex items-center gap-1.5">
+                  <span class="text-slate-400 font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-fire text-amber-400"></i>温度:
+                  </span>
+                  <input type="range" id="sandbox-temp-range" min="0.0" max="2.0" step="0.1" value="0.7" class="w-20 accent-cyan-400 cursor-pointer" title="调节生成随机性与发散度 (0.0~2.0)">
+                  <span id="sandbox-temp-val" class="font-mono text-cyan-300 w-7 text-center font-bold">0.7</span>
+                </div>
+
+                <!-- 输出Token上限 -->
+                <div class="flex items-center gap-1.5">
+                  <span class="text-slate-400 font-medium flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-up-right-dots text-emerald-400"></i>MaxTokens:
+                  </span>
+                  <input type="number" id="sandbox-max-tokens" min="50" max="8192" step="50" value="500" class="input-field py-1 px-2 text-xs w-20 text-center font-mono font-bold" title="单次最大输出Token数 (50~8192)">
+                </div>
+              </div>
+
+              <!-- 右侧提示与清空上下文 -->
+              <div class="flex items-center gap-2.5">
+                <span class="text-[11px] text-slate-500 hidden sm:inline select-none">
+                  <i class="fa-solid fa-circle-info mr-1 text-slate-400"></i>仅本页生效不同步全局
+                </span>
+                <button type="button" id="btn-sandbox-clear" class="btn-danger py-1 px-3 text-xs flex items-center gap-1.5 shadow-sm transition" title="清空本页多轮上下文记忆">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                  <span>清空上下文</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- 聊天窗口 -->
+            <div id="sandbox-chat-box" class="h-96 overflow-y-auto space-y-4 p-4 rounded-xl bg-slate-950/60 border border-slate-800/80">
+              <!-- 初始欢迎语 -->
+              <div class="flex items-start gap-3">
+                <img src="/static/img/avatar.png" class="w-8 h-8 rounded-full object-cover">
+                <div class="space-y-1">
+                  <div class="text-xs text-cyan-300 font-semibold">风又音理</div>
+                  <div class="chat-bubble-bot">哥哥，早上好——！怎么还在赖床呀？快起来，音理特制的大饭团已经准备好咯！</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 输入栏 -->
+            <form id="sandbox-chat-form" class="flex gap-2">
+              <input type="text" id="sandbox-input" class="input-field flex-1" placeholder="跟音理说点什么吧..." autocomplete="off">
+              <button type="submit" class="btn-primary px-5 flex items-center gap-2">
+                <span>发送</span>
+                <i class="fa-solid fa-paper-plane text-xs"></i>
+              </button>
+            </form>
+          </div>
+        </section>
+
+        <!-- ================= TAB 8: 连接与系统安全 ================= -->
+        <section id="tab-settings" class="tab-pane space-y-6">
+          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
+            <div>
+              <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-gear text-cyan-400"></i>
+                <span>OneBot11 连接模式（正向 / 反向 / Docker 容器互联）与安全</span>
+              </h3>
+              <p class="text-xs text-slate-400 mt-1">支持机器人主动连接 NapCat 容器（正向WS），也支持 NapCat 连接本机器人（反向WS），可自由配置自定义网络地址。</p>
+            </div>
+
+            <!-- 连接模式与网络地址配置 -->
+            <div class="border border-slate-800 p-4 rounded-xl space-y-4 bg-slate-900/40">
+              <h4 class="text-sm font-semibold text-slate-200 flex items-center gap-2">
+                <i class="fa-solid fa-network-wired text-sky-400"></i>
+                <span>OneBot11 网络通信协议设定</span>
+              </h4>
+
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">WebSocket 连接模式</label>
+                  <select id="cfg-onebot-mode" class="input-field">
+                    <option value="both">🌟 双向同时启用（推荐：既听反向，又连正向）</option>
+                    <option value="forward_ws">正向客户端（由音理主动连接 NapCat Docker 暴露的 ws 地址）</option>
+                    <option value="reverse_ws">反向服务端（由 NapCat 反向连接本机器人的 ws 端口）</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">OneBot 连接密钥 (Token，无则留空)</label>
+                  <input type="password" id="cfg-onebot-token" class="input-field" placeholder="留空或与 NapCat 一致">
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">正向 WebSocket 目标地址 (连接到 NapCat / Docker)</label>
+                  <input type="text" id="cfg-onebot-forward-url" class="input-field font-mono" value="ws://127.0.0.1:3001" placeholder="ws://127.0.0.1:3001 或 ws://172.17.0.2:3001">
+                  <p class="text-[11px] text-slate-400 mt-1">若 NapCat 跑在 Docker 容器并映射了端口，在此填入对应宿主机映射地址或容器IP</p>
+                </div>
+
+                <div>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">反向 WebSocket 监听路径 (NapCat 连入)</label>
+                  <input type="text" id="cfg-onebot-reverse-path" class="input-field font-mono" value="/onebot/v11/ws">
+                  <p class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
+                    <span>默认监听: <code id="ws-uri-copy" class="text-cyan-400 font-mono">ws://127.0.0.1:8088/onebot/v11/ws</code></span>
+                    <button type="button" id="btn-copy-ws" class="text-xs text-indigo-400 hover:text-indigo-300 underline inline-flex items-center gap-1">
+                      <i class="fa-regular fa-copy"></i>
+                      <span>复制</span>
+                    </button>
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex justify-end pt-2">
+                <button type="button" id="btn-save-onebot" class="btn-primary px-5 py-2 text-xs flex items-center gap-1.5">
+                  <i class="fa-solid fa-floppy-disk"></i>
+                  <span>保存 OneBot 连接设定</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Docker 容器互联指引 -->
+            <div class="bg-indigo-950/30 border border-indigo-800/50 p-4 rounded-xl space-y-2 text-xs">
+              <h4 class="font-bold text-indigo-300 text-sm flex items-center gap-1.5">
+                <i class="fa-brands fa-docker text-sky-400 text-base"></i>
+                <span>Docker 容器互联指引</span>
+              </h4>
+              <div class="space-y-1.5 text-slate-300">
+                <p><b>方案 A（正向连接 - 极简）：</b> 在 Docker 启动 NapCat 时映射正向 ws 端口（如 <code>-p 3001:3001</code>），在上方填入 <code>ws://127.0.0.1:3001</code> 并保存，音理会自动发起持久连接！</p>
+                <p><b>方案 B（反向连接）：</b> 在 NapCat 容器内的网络配置中添加反向 WS，地址填入：<code class="bg-slate-900 px-2 py-0.5 rounded text-cyan-300 font-mono">ws://host.docker.internal:8088/onebot/v11/ws</code>（Windows Docker 环境）或填宿主机局域网 IP。</p>
+              </div>
+            </div>
+
+            <!-- 修改管理员密码 -->
+            <div class="border border-slate-800 p-4 rounded-xl space-y-3 bg-slate-900/40">
+              <h4 class="text-sm font-semibold text-slate-200">修改 WebUI 管理员密码</h4>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">当前原密码</label>
+                  <input type="password" id="chg-old-pw" class="input-field" placeholder="原密码">
+                </div>
+                <div>
+                  <label class="block text-xs text-slate-400 mb-1">新密码（不低于6位）</label>
+                  <input type="password" id="chg-new-pw" class="input-field" placeholder="新密码">
+                </div>
+              </div>
+              <button id="btn-change-pw" class="btn-secondary text-xs px-4 py-2 mt-2">修改密码</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ================= TAB: 插件生态与微内核驱动中枢 ================= -->
+        <section id="tab-plugins" class="tab-pane space-y-6">
+          <!-- 顶部横幅与操作区 -->
+          <div class="glass-card p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div>
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🧩</span>
+                <h2 class="text-lg font-bold text-slate-100">插件生态与微内核驱动</h2>
+                <span class="badge-cyan text-xs">Microkernel v2.0</span>
+              </div>
+              <p class="text-xs text-slate-400 mt-1">
+                支持第三方协议适配器 (Telegram/Discord)、异构记忆架构、Agentic 技能调用 (Function Calling) 与全栈微前端
+              </p>
+            </div>
+            <div class="flex flex-wrap items-center gap-2 shrink-0">
+              <input type="file" id="plugin-zip-file-input" accept=".zip" class="hidden">
+              <button id="btn-upload-plugin" class="btn-primary text-xs px-3.5 py-2 flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+                <span>安装插件 (.zip)</span>
+              </button>
+              <button id="btn-view-plugin-docs" class="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5 cursor-pointer text-cyan-300 hover:text-cyan-200 border-cyan-800/50">
+                <i class="fa-solid fa-book-open text-cyan-400"></i>
+                <span>开发与编写规范文档</span>
+              </button>
+              <button id="btn-refresh-plugins" class="btn-secondary text-xs px-3 py-2 flex items-center gap-1.5 cursor-pointer">
+                <i class="fa-solid fa-rotate"></i>
+                <span>刷新</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- 微内核核心驱动状态概览看板 -->
+          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <!-- 记忆系统驱动看板 -->
+            <div class="metric-card space-y-3">
+              <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-brain text-purple-400"></i>
+                  <span>当前记忆系统驱动</span>
+                </span>
+                <span id="active-memory-driver-badge" class="px-2 py-0.5 rounded text-[10px] bg-purple-500/20 text-purple-300 font-normal">默认</span>
+              </div>
+              <div>
+                <select id="select-active-memory-driver" class="input-field text-xs">
+                  <option value="chroma_default">ChromaDB 向量深度记忆引擎 (默认内置)</option>
+                </select>
+                <p class="text-[11px] text-slate-400 mt-1.5">支持随时切换至轻量 SQLite、Mem0 或知识图谱记忆引擎</p>
+              </div>
+            </div>
+
+            <!-- 通信适配器驱动看板 -->
+            <div class="metric-card space-y-3">
+              <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-tower-broadcast text-cyan-400"></i>
+                  <span>通信协议适配器</span>
+                </span>
+                <span id="adapters-count-badge" class="px-2 py-0.5 rounded text-[10px] bg-cyan-500/20 text-cyan-300 font-normal">1 个在线</span>
+              </div>
+              <div id="adapters-status-list" class="space-y-1.5 text-xs text-slate-300 max-h-24 overflow-y-auto">
+                <div class="flex items-center justify-between py-1 border-b border-slate-800/60">
+                  <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400"></span> OneBot11 (NapCat / QQ)</span>
+                  <span class="text-[10px] text-emerald-400">活跃</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agentic 技能工具看板 -->
+            <div class="metric-card space-y-3">
+              <div class="flex items-center justify-between text-xs text-slate-400 font-semibold">
+                <span class="flex items-center gap-1.5">
+                  <i class="fa-solid fa-screwdriver-wrench text-amber-400"></i>
+                  <span>Agent 技能工具库</span>
+                </span>
+                <span id="skills-count-badge" class="px-2 py-0.5 rounded text-[10px] bg-amber-500/20 text-amber-300 font-normal">0 个已注册</span>
+              </div>
+              <div id="skills-tags-container" class="flex flex-wrap gap-1.5 text-xs">
+                <span class="text-slate-500 text-xs py-1">暂无激活的外部技能</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 已安装插件网格列表 -->
+          <div class="glass-card p-5 space-y-4">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+              <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <i class="fa-solid fa-boxes-stacked text-cyan-400"></i>
+                <span>已安装插件生态列表</span>
+              </h3>
+              <span id="plugins-total-count" class="text-xs text-slate-400">共 0 个插件</span>
+            </div>
+
+            <div id="plugins-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+              <div class="col-span-full py-12 text-center text-slate-400 text-xs">
+                <i class="fa-solid fa-spinner fa-spin text-lg mb-2"></i>
+                <p>正在扫描并加载插件生态...</p>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 插件微前端动态 Tab 容器 (微前端独立页面挂载点) -->
+        <div id="dynamic-tab-panes-container"></div>
+
+      </main>
+    </div>
+
+    <!-- ================= 弹窗: 插件快捷设置 ================= -->
+    <div id="modal-plugin-settings" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden transition-all">
+      <div class="glass-card w-full max-w-lg p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 id="modal-plugin-settings-title" class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-sliders text-cyan-400"></i>
+            <span>插件专属配置</span>
+          </h3>
+          <button id="btn-close-plugin-settings-modal" class="text-slate-400 hover:text-slate-200 text-sm cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <form id="form-plugin-settings" class="space-y-3.5 max-h-[65vh] overflow-y-auto pr-1">
+          <input type="hidden" id="plugin-settings-id-hidden">
+          <div id="plugin-settings-fields-container" class="space-y-3"></div>
+          <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <button type="button" id="btn-cancel-plugin-settings" class="btn-secondary px-4 py-1.5 text-xs cursor-pointer">取消</button>
+            <button type="submit" class="btn-primary px-4 py-1.5 text-xs cursor-pointer">保存配置</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ================= 弹窗: 插件 README 说明文档 ================= -->
+    <div id="modal-plugin-readme" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden transition-all">
+      <div class="glass-card w-full max-w-2xl p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 id="modal-plugin-readme-title" class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-book text-cyan-400"></i>
+            <span>插件文档与说明</span>
+          </h3>
+          <button id="btn-close-plugin-readme-modal" class="text-slate-400 hover:text-slate-200 text-sm cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="plugin-readme-content" class="flex-1 overflow-y-auto text-xs text-slate-300 leading-relaxed space-y-2 p-2 bg-slate-900/40 rounded-xl border border-slate-800/80 whitespace-pre-wrap"></div>
+      </div>
+    </div>
+
+    <!-- ================= 弹窗: 添加/编辑供应商 ================= -->
+    <div id="modal-provider" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden transition-all">
+      <div class="glass-card w-full max-w-lg p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 id="modal-provider-title" class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-server text-cyan-400"></i>
+            <span>配置 LLM 供应商</span>
+          </h3>
+          <button id="btn-close-provider-modal" class="text-slate-400 hover:text-slate-200 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <form id="form-provider" class="space-y-3.5">
+          <input type="hidden" id="provider-id-hidden">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">供应商名称 (例如: SiliconFlow, OpenAI, DeepSeek, Ollama)</label>
+            <input type="text" id="provider-name-input" class="input-field text-xs" placeholder="供应商名称" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Base URL (OpenAI 兼容端点)</label>
+            <input type="text" id="provider-url-input" class="input-field text-xs" placeholder="https://api.siliconflow.cn/v1" required>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">API Key</label>
+            <input type="password" id="provider-key-input" class="input-field text-xs" placeholder="sk-...">
+          </div>
+          <div class="flex items-center gap-2">
+            <input type="checkbox" id="provider-enabled-input" class="w-4 h-4 rounded accent-cyan-400" checked>
+            <label for="provider-enabled-input" class="text-xs text-slate-300 cursor-pointer">启用此供应商</label>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <button type="button" id="btn-cancel-provider" class="btn-secondary px-4 py-1.5 text-xs">取消</button>
+            <button type="submit" class="btn-primary px-4 py-1.5 text-xs">保存供应商</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ================= 弹窗: 上游拉取的模型选择列表 ================= -->
+    <div id="modal-provider-models" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden transition-all">
+      <div class="glass-card w-full max-w-2xl p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-list-check text-purple-400"></i>
+              <span>从供应商拉取模型列表</span>
+            </h3>
+            <p id="modal-fetch-subtitle" class="text-xs text-slate-400 mt-0.5">选择心仪模型加入系统模型库</p>
+          </div>
+          <button id="btn-close-fetch-modal" class="text-slate-400 hover:text-slate-200 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <div class="flex-1 overflow-y-auto pr-1 space-y-2">
+          <input type="text" id="filter-fetched-models" placeholder="快速过滤模型..." class="input-field text-xs mb-2">
+          <div id="fetched-models-list" class="space-y-1.5">
+            <div class="text-xs text-slate-500 py-6 text-center">正在拉取模型中...</div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-3 border-t border-slate-800">
+          <button type="button" id="btn-done-fetch-modal" class="btn-secondary px-4 py-1.5 text-xs">完成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 弹窗: 添加/编辑模型库模型 ================= -->
+    <div id="modal-hub-item" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden transition-all">
+      <div class="glass-card w-full max-w-xl p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 id="modal-hub-title" class="font-bold text-sm text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-cube text-purple-400"></i>
+            <span>配置系统模型库条目</span>
+          </h3>
+          <button id="btn-close-hub-modal" class="text-slate-400 hover:text-slate-200 text-sm"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <form id="form-hub-item" class="space-y-3.5">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">所属供应商</label>
+              <select id="hub-provider-select" class="input-field text-xs" required></select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">上游模型真实ID</label>
+              <input type="text" id="hub-model-name-input" class="input-field text-xs" placeholder="deepseek-ai/DeepSeek-V3" required>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">系统专属 Tag (格式：提供商/模型名称)</label>
+            <input type="text" id="hub-tag-input" class="input-field text-xs" placeholder="SiliconFlow/deepseek-ai/DeepSeek-V3" required>
+            <p class="text-[11px] text-slate-500 mt-0.5">指令切换与会话绑定将使用此 Tag 标识模型</p>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">友好显示名称 (可选)</label>
+            <input type="text" id="hub-display-name-input" class="input-field text-xs" placeholder="DeepSeek V3 (极速版)">
+          </div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">默认温度 (<span id="hub-temp-val">0.7</span>)</label>
+              <input type="range" id="hub-temp-input" min="0" max="1.5" step="0.05" value="0.7" class="w-full accent-cyan-400">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">单次Token上限</label>
+              <input type="number" id="hub-maxtokens-input" value="200" min="50" max="4000" class="input-field text-xs">
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-300 mb-1">上下文轮数</label>
+              <input type="number" id="hub-context-input" value="12" min="2" max="60" class="input-field text-xs">
+            </div>
+          </div>
+
+          <!-- 多模态能力配置 -->
+          <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+            <div class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i class="fa-solid fa-shapes text-cyan-400"></i>
+              <span>多模态传输适配 (勾选开启对应多模态支持)</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2 text-xs text-slate-300 pt-1">
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="hub-support-vision" class="w-4 h-4 rounded accent-cyan-400">
+                <span>📷 图传 / 识图</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="hub-support-audio" class="w-4 h-4 rounded accent-cyan-400">
+                <span>🎙️ 音频传输</span>
+              </label>
+              <label class="flex items-center gap-1.5 cursor-pointer">
+                <input type="checkbox" id="hub-support-video" class="w-4 h-4 rounded accent-cyan-400">
+                <span>🎬 视频传输</span>
+              </label>
+            </div>
+            <p class="text-[11px] text-slate-500">注：若全部留空不勾选，系统将自动识别为非多模态模型，在用户发送图片时安全降级为文字标签，避免上游 400 报错。</p>
+          </div>
+
+          <!-- 模型计费单价 (用于看板成本统计) -->
+          <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+            <div class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+              <i class="fa-solid fa-coins text-amber-400"></i>
+              <span>Token 计费单价设定 (用于看板成本统计)</span>
+            </div>
+            <div class="grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1">输入 (Prompt) 单价 (¥ / 1M Tokens)</label>
+                <input type="number" step="0.0001" min="0" id="hub-price-prompt-input" value="0.0" class="input-field text-xs font-mono" placeholder="如 2.0 (即 ¥2/百万Tokens)">
+              </div>
+              <div>
+                <label class="block text-[11px] font-semibold text-slate-300 mb-1">输出 (Completion) 单价 (¥ / 1M Tokens)</label>
+                <input type="number" step="0.0001" min="0" id="hub-price-completion-input" value="0.0" class="input-field text-xs font-mono" placeholder="如 8.0 (即 ¥8/百万Tokens)">
+              </div>
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <button type="button" id="btn-cancel-hub" class="btn-secondary px-4 py-1.5 text-xs">取消</button>
+            <button type="submit" class="btn-primary px-4 py-1.5 text-xs">保存并加入模型库</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 记忆录入 / 修正弹窗 -->
+    <div id="modal-mem-form" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+      <div class="glass-card max-w-lg w-full p-6 rounded-2xl border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 id="modal-mem-title" class="text-sm font-bold text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-brain text-cyan-400"></i>
+            <span>录入记忆碎片</span>
+          </h3>
+          <button type="button" id="btn-close-mem-modal" class="text-slate-400 hover:text-slate-200">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <form id="form-mem-item" class="space-y-3.5 text-xs">
+          <input type="hidden" id="mem-form-id" value="">
+          <div>
+            <label class="text-slate-400 block mb-1">所属用户 QQ 号 (0 或留空代表全局通用记忆)</label>
+            <input type="number" id="mem-form-qq" value="0" class="input-field py-1.5" required>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="text-slate-400 block mb-1">记忆类型</label>
+              <select id="mem-form-type" class="input-field py-1.5">
+                <option value="fact">核心事实 (Fact - 稳定长期设定)</option>
+                <option value="episode">情景事件 (Episode - 近期对话回忆)</option>
+              </select>
+            </div>
+            <div>
+              <label class="text-slate-400 block mb-1">重要度 (权重: <span id="mem-form-importance-val">3.0</span>)</label>
+              <input type="range" id="mem-form-importance" min="1.0" max="5.0" step="0.5" value="3.0" class="w-full mt-2 accent-cyan-400">
+            </div>
+          </div>
+
+          <div>
+            <label class="text-slate-400 block mb-1">记忆内容描述</label>
+            <textarea id="mem-form-content" rows="4" placeholder="例如: 用户喜欢的料理与日常事件、交流备忘记录等。" class="input-field py-2 resize-none" required></textarea>
+          </div>
+
+          <div class="flex justify-end gap-2 pt-3 border-t border-slate-800">
+            <button type="button" id="btn-cancel-mem-modal" class="btn-secondary px-4 py-1.5 text-xs">取消</button>
+            <button type="submit" class="btn-primary px-4 py-1.5 text-xs">保存记忆</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 记忆系统全链路自检弹窗 -->
+    <div id="modal-mem-selftest" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm hidden flex items-center justify-center p-4">
+      <div class="glass-card max-w-lg w-full p-6 rounded-2xl border border-slate-800 space-y-4">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+            <i class="fa-solid fa-stethoscope text-cyan-400"></i>
+            <span>记忆系统全链路自检诊断报告</span>
+          </h3>
+          <button type="button" id="btn-close-mem-selftest" class="text-slate-400 hover:text-slate-200">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+
+        <div id="mem-selftest-content" class="space-y-3 text-xs">
+          <div class="text-center py-8 text-slate-400">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-cyan-400 mb-2"></i>
+            <div>正在探测向量库、离线模型推理与读写时延...</div>
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-3 border-t border-slate-800">
+          <button type="button" id="btn-done-mem-selftest" class="btn-primary px-4 py-1.5 text-xs">完成</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 插件开发与编写规范文档查看弹窗 -->
+    <div id="modal-plugin-docs" class="fixed inset-0 z-50 bg-black/75 backdrop-blur-md hidden flex items-center justify-center p-3 sm:p-6">
+      <div class="glass-card max-w-4xl w-full max-h-[90vh] flex flex-col rounded-2xl border border-cyan-800/60 shadow-2xl overflow-hidden">
+        <div class="flex items-center justify-between border-b border-slate-800 px-5 py-4 shrink-0 bg-slate-900/60">
+          <div class="flex items-center gap-2.5">
+            <i class="fa-solid fa-book-open text-cyan-400 text-lg"></i>
+            <div>
+              <h3 class="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <span>微内核插件系统开发与编写规范文档</span>
+                <span class="badge-cyan text-[10px]">PLUGIN_DEVELOPMENT_GUIDE.md</span>
+              </h3>
+              <p class="text-[11px] text-slate-400">本地路径: docs/PLUGIN_DEVELOPMENT_GUIDE.md · 示例插件代码位于 docs/examples/</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-2">
+            <a href="/api/plugins/docs/guide/raw" target="_blank" class="neri-btn-outline text-xs px-3 py-1.5 rounded-lg border border-slate-700 hover:border-cyan-500 text-slate-300 hover:text-cyan-300 flex items-center gap-1.5 transition">
+              <i class="fa-solid fa-arrow-up-right-from-square"></i>
+              <span class="hidden sm:inline">新窗口查看原始MD</span>
+            </a>
+            <button type="button" id="btn-close-plugin-docs" class="text-slate-400 hover:text-rose-400 p-1.5 rounded-lg transition cursor-pointer">
+              <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+          </div>
+        </div>
+
+        <div id="plugin-docs-body" class="p-6 overflow-y-auto space-y-4 text-xs text-slate-200 leading-relaxed font-sans scrollbar-thin select-text">
+          <div class="text-center py-12 text-slate-400">
+            <i class="fa-solid fa-spinner fa-spin text-2xl text-cyan-400 mb-2"></i>
+            <div>正在加载插件开发规范文档...</div>
+          </div>
+        </div>
+
+        <div class="flex items-center justify-between px-5 py-3 border-t border-slate-800 shrink-0 bg-slate-900/60">
+          <span class="text-[11px] text-slate-400">支持直接复制、编写或继承 BasePlugin / BaseAdapter / BaseMemoryDriver / BaseSkill</span>
+          <button type="button" id="btn-done-plugin-docs" class="btn-primary px-5 py-1.5 text-xs font-semibold">关闭</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= 弹窗: 主页组件自定义编辑 (拖动排序 & 尺寸设置) ================= -->
+    <div id="modal-widget-editor" class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-md hidden transition-all">
+      <div class="glass-card w-full max-w-2xl p-6 rounded-2xl border border-slate-700 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h3 class="font-bold text-sm text-slate-100 flex items-center gap-2">
+              <i class="fa-solid fa-table-cells-large text-cyan-400"></i>
+              <span>自定义主页看板组件</span>
+            </h3>
+            <p class="text-xs text-slate-400 mt-0.5">拖动手柄或点击上下箭头排序，自由切换大/中/小三档尺寸与显示状态</p>
+          </div>
+          <button id="btn-close-widget-editor" class="text-slate-400 hover:text-slate-200 text-sm cursor-pointer"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+
+        <!-- 组件编辑列表容器 -->
+        <div id="widget-editor-list" class="flex-1 overflow-y-auto space-y-2.5 pr-1 scrollbar-thin"></div>
+
+        <div class="flex items-center justify-between pt-3 border-t border-slate-800">
+          <button type="button" id="btn-reset-widgets" class="btn-secondary px-3.5 py-1.5 text-xs text-rose-300 border-rose-800/60 hover:bg-rose-950/40 cursor-pointer">
+            <i class="fa-solid fa-rotate-left mr-1"></i>恢复默认排版
+          </button>
+          <div class="flex gap-2">
+            <button type="button" id="btn-cancel-widget-editor" class="btn-secondary px-4 py-1.5 text-xs cursor-pointer">取消</button>
+            <button type="button" id="btn-save-widgets" class="btn-primary px-5 py-1.5 text-xs cursor-pointer">保存并应用布局</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 底部状态栏 -->
+    <footer class="border-t border-slate-900 px-6 py-3 text-center text-xs text-slate-500">
+      音理 (Kazamata Neri) QQ 机器人服务 · 基于 OneBot11 / NapCat · Local GPT-SoVITS TTS · 默认规范体系
+    </footer>
+  </div>
+
+  <script src="/static/js/neri_theme.js?v=4.6.2"></script>
+  <script src="/static/js/app.js?v=2.0.7"></script>
+</body>
+</html>

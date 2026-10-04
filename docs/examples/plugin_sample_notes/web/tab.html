@@ -1,0 +1,91 @@
+<div class="glass-card p-6 mb-6">
+    <div class="flex items-center justify-between pb-4 border-b border-white/10">
+        <div>
+            <h2 class="text-xl font-bold flex items-center gap-2">
+                <span>📝</span> 备忘便签中心
+                <span class="text-xs px-2 py-0.5 rounded-full bg-cyan-500/20 text-cyan-300 font-normal">全栈插件微前端示范</span>
+            </h2>
+            <p class="text-sm text-gray-400 mt-1">此页面由 plugin_sample_notes 插件动态注入，具备独立的组件状态与数据存储。</p>
+        </div>
+        <button id="btn-add-sample-note" class="btn-primary px-4 py-2 rounded-xl text-sm flex items-center gap-2 shadow-lg hover:shadow-cyan-500/20">
+            <span>➕</span> 新建便签
+        </button>
+    </div>
+
+    <!-- 便签卡片瀑布流网格 -->
+    <div id="sample-notes-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 mt-6">
+        <div class="col-span-full py-8 text-center text-gray-400">正在载入便签数据...</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    async function fetchNotes() {
+        const grid = document.getElementById('sample-notes-grid');
+        if (!grid) return;
+        try {
+            const resp = await fetch('/api/plugins/plugin_sample_notes/notes');
+            const data = await resp.json();
+            const notes = data.notes || [];
+            if (notes.length === 0) {
+                grid.innerHTML = '<div class="col-span-full py-12 text-center text-gray-400"><p class="text-3xl mb-2">📋</p>暂无便签，点击右上角新建第一条便签吧！</div>';
+                return;
+            }
+            grid.innerHTML = notes.map(n => `
+                <div class="p-4 rounded-xl border border-white/10 bg-white/5 backdrop-blur hover:border-cyan-400/30 transition-all flex flex-col justify-between">
+                    <div>
+                        <h3 class="font-bold text-base text-gray-100 mb-1">${escapeHtml(n.title)}</h3>
+                        <p class="text-sm text-gray-300 whitespace-pre-wrap">${escapeHtml(n.content)}</p>
+                    </div>
+                    <div class="mt-4 pt-3 border-t border-white/10 flex items-center justify-between text-xs text-gray-400">
+                        <span>${new Date(n.created_at * 1000).toLocaleString()}</span>
+                        <button onclick="window.deleteSampleNote('${n.id}')" class="text-rose-400 hover:text-rose-300">删除</button>
+                    </div>
+                </div>
+            `).join('');
+        } catch(e) {
+            grid.innerHTML = `<div class="col-span-full py-4 text-center text-rose-400">加载便签失败: ${e.message}</div>`;
+        }
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>'"]/g, tag => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[tag] || tag));
+    }
+
+    window.deleteSampleNote = async function(id) {
+        const ok = await (window.showConfirmDialog ? window.showConfirmDialog("删除便签", "确定要删除这条便签吗？") : confirm("确定删除？"));
+        if (!ok) return;
+        try {
+            await fetch(`/api/plugins/plugin_sample_notes/notes/${id}`, { method: 'DELETE' });
+            fetchNotes();
+            if (window.showToast) window.showToast("便签已删除", "info");
+        } catch(e) {
+            if (window.showToast) window.showToast(`删除失败: ${e.message}`, "error");
+        }
+    };
+
+    const addBtn = document.getElementById('btn-add-sample-note');
+    if (addBtn) {
+        addBtn.onclick = async () => {
+            const title = prompt("请输入便签标题：");
+            if (!title) return;
+            const content = prompt("请输入便签内容：");
+            if (!content) return;
+            try {
+                await fetch('/api/plugins/plugin_sample_notes/notes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+                fetchNotes();
+                if (window.showToast) window.showToast("便签创建成功！", "success");
+            } catch(e) {
+                if (window.showToast) window.showToast(`创建失败: ${e.message}`, "error");
+            }
+        };
+    }
+
+    fetchNotes();
+})();
+</script>

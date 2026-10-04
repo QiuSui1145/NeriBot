@@ -1,0 +1,40 @@
+# Python Bytecode & Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Virtual Environment
+.venv/
+venv/
+ENV/
+env/
+
+# IDE & Editor
+.idea/
+.vscode/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+
+# Logs & Temporary Files
+cache/*.log
+cache/images/*
+!cache/images/.gitkeep
+cache/audio/*
+!cache/audio/.gitkeep
+*.tmp
+
+# Dynamic Runtime Database (Auto-generated on startup)
+data/stats.db
+data/stats.db-journal
+data/sessions_context.json
+
+# Private Configuration (API Keys & Passwords)
+# We keep config.example.json tracked in git.
+config/config.json
+
+# Large model weights (auto-downloaded via install.bat or ModelScope)
+models/embedding/bge-small-zh-v1.5/*.safetensors
+models/embedding/bge-small-zh-v1.5/*.bin
