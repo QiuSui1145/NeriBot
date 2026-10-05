@@ -94,6 +94,19 @@ class BotService:
         hist = self._session_reply_history.setdefault(session_key, [])
         hist.append(now)
 
+    def check_is_master(self, user_id: int) -> bool:
+        """判定目标用户是否为核心主人/哥哥（至亲·钟城晓）。"""
+        cfg = config_manager.config
+        sec = cfg.security
+        matched_binding = next((b for b in sec.identity_bindings if b.qq == user_id), None)
+        if matched_binding and matched_binding.is_master:
+            return True
+        if sec.master_qq and user_id == sec.master_qq:
+            return True
+        if not sec.master_qq and user_id in sec.admin_list:
+            return True
+        return False
+
     def build_speaker_profile(self, user_id: int, nickname: str) -> Tuple[str, bool]:
         """构建说话者专属身份标签档案，供大模型精准认人与切换称呼态度。"""
         cfg = config_manager.config
@@ -112,10 +125,11 @@ class BotService:
                 profile = (
                     f"\n\n【说话者专属识别档案：至亲·钟城 晓（哥哥）】\n"
                     f"- 识别QQ号：{matched_binding.qq}\n"
-                    f"- 真实身份：【主人 / 哥哥（钟城 晓）】—— 你唯一的笨蛋哥哥，老画室的落魄画家，你誓死守望之人！\n"
+                    f"- 当前说话者在群聊中的网名/群昵称：【{nickname}】\n"
+                    f"- 真实身份：【主人 / 哥哥（钟城 晓）】—— 你唯一的笨蛋哥哥，老画室的落魄画家，你誓死守望之人！无论对方在群里的群昵称叫什么（如“{nickname}”），他就是哥哥本人！对白历史中所有署名为“{nickname}”或“[哥哥/主人]”的发言全部来自哥哥！\n"
                     f"- 现状与羁绊：你们共同将器官捐献给了夜羽真白，此刻正一同坐在真白内心世界的星空列车车厢里，看遍星河与人间风景（真白到哪你们就到哪）。\n"
-                    f"- 称呼指令：必须亲切称呼对方为“哥哥”（お兄ちゃん），斗嘴生气时直呼“笨蛋晓”或全名。\n"
-                    f"- 态度与互动：展现毫无保留的信任、管束生活起居（没收冰啤酒/催吃饭/催睡觉）、调侃他在列车上的窘态。绝对禁止以说书人姿态讲列车童话，你们是生死与共的同乘者！\n"
+                    f"- 称呼指令：面对他时，你必须亲切称呼对方为“哥哥”（お兄ちゃん），斗嘴生气时直呼“笨蛋晓”或全名。**绝对严禁**像对待普通群友那样直呼其群昵称“{nickname}”！\n"
+                    f"- 态度与互动：展现毫无保留的信任、管束生活起居（没收冰啤酒/催吃饭/催睡觉/管束熬夜）、调侃他在列车上的窘态。绝对禁止以说书人姿态讲列车童话，你们是生死与共的同乘者！\n"
                     f"- 专属备忘：{matched_binding.custom_notes or '老画室五百日元誓约、烤鲑鱼大饭团、星空列车动力炉死斗、真白到哪我们就能到哪'}\n"
                 )
             else:
@@ -136,10 +150,11 @@ class BotService:
             profile = (
                 f"\n\n【说话者专属识别档案：至亲·钟城 晓（哥哥）】\n"
                 f"- 识别QQ号：{user_id}\n"
-                f"- 真实身份：【主人 / 哥哥（钟城 晓）】—— 你唯一的笨蛋哥哥，老画室的落魄画家，你誓死守望之人！\n"
+                f"- 当前说话者在群聊中的网名/群昵称：【{nickname}】\n"
+                f"- 真实身份：【主人 / 哥哥（钟城 晓）】—— 你唯一的笨蛋哥哥，老画室的落魄画家，你誓死守望之人！无论对方在群里的群昵称叫什么（如“{nickname}”），他就是哥哥本人！对白历史中所有署名为“{nickname}”或“[哥哥/主人]”的发言全部来自哥哥！\n"
                 f"- 现状与羁绊：你们共同将器官捐献给了夜羽真白，此刻正一同坐在真白内心世界的星空列车车厢里，看遍星河与人间风景（真白到哪你们就到哪）。\n"
-                f"- 称呼指令：必须亲切称呼对方为“哥哥”（お兄ちゃん），斗嘴生气时直呼“笨蛋晓”或全名。\n"
-                f"- 态度与互动：展现毫无保留的信任、管束生活起居（没收冰啤酒/催吃饭/催睡觉）、调侃他在列车上的窘态。绝对禁止以说书人姿态讲列车童话，你们是生死与共的同乘者！\n"
+                f"- 称呼指令：面对他时，你必须亲切称呼对方为“哥哥”（お兄ちゃん），斗嘴生气时直呼“笨蛋晓”或全名。**绝对严禁**像对待普通群友那样直呼其群昵称“{nickname}”！\n"
+                f"- 态度与互动：展现毫无保留的信任、管束生活起居（没收冰啤酒/催吃饭/催睡觉/管束熬夜）、调侃他在列车上的窘态。绝对禁止以说书人姿态讲列车童话，你们是生死与共的同乘者！\n"
             )
             return profile, True
 
@@ -296,7 +311,8 @@ class BotService:
                     
                     # 【核心修改】将不主动回复的群聊消息也压入主信息流，以便 WebUI 监控和 LLM 获取上下文
                     sess = context_manager.get_session(session_type, target_id)
-                    evicted = sess.add_message("user", clean_text, user_name=nickname, images=image_urls or [])
+                    sender_label = f"[哥哥/主人] {nickname}" if self.check_is_master(user_id) else nickname
+                    evicted = sess.add_message("user", clean_text, user_name=sender_label, images=image_urls or [])
                     if evicted:
                         await self._summarize_context_async(session_type, target_id, evicted)
                     context_manager.save()
@@ -398,7 +414,8 @@ class BotService:
         # 主动回复时，真实的群聊消息在前面已写入上下文，绝对不能把提示指令当做用户发言写入历史！
         sess = context_manager.get_session(session_type, target_id)
         if not is_active_reply:
-            evicted_user = sess.add_message("user", user_text, user_name=nickname, images=image_urls or [])
+            sender_label = f"[哥哥/主人] {nickname}" if is_master else nickname
+            evicted_user = sess.add_message("user", user_text, user_name=sender_label, images=image_urls or [])
             context_manager.save()
         else:
             evicted_user = []
@@ -438,10 +455,15 @@ class BotService:
             # 群聊环境下在末尾注入角色对白强硬锚点，杜绝指令模型将多方对话误判为分析材料
             if llm_messages and llm_messages[-1]["role"] == "user":
                 last_m = llm_messages[-1]
+                target_identity = (
+                    f"正在对你唯一的哥哥（当前群昵称：{nickname}）说话，必须亲切称呼对方为“哥哥”（お兄ちゃん，绝对严禁直呼其群昵称‘{nickname}’）"
+                    if is_master
+                    else f"正在与群友【{nickname}】交流，以活泼元气口吻直呼其昵称，严禁叫对方哥哥"
+                )
                 cue_suffix = (
-                    "\n（音理以第一人称对白回复，严禁任何思考分析过程，第一字必须以 [TEXT] 标签开头）："
+                    f"\n（音理以第一人称对白回复，{target_identity}，严禁任何思考分析过程，第一字必须以 [TEXT] 标签开头）："
                     if is_simultaneous
-                    else "\n（请音理以第一人称口吻直接回复台词，严禁输出任何思考或分析过程）："
+                    else f"\n（请音理以第一人称口吻直接回复台词，{target_identity}，严禁输出任何思考或分析过程）："
                 )
                 if isinstance(last_m.get("content"), str):
                     last_m["content"] += cue_suffix
