@@ -51,6 +51,7 @@ class PromptSaveRequest(BaseModel):
 
 
 class SandboxChatRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
     message: str
     messages: Optional[List[Dict[str, Any]]] = None
     model_tag: Optional[str] = None
