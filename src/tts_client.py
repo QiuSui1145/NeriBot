@@ -35,8 +35,9 @@ REASONING_PATTERNS = [
     r"回复策略[：:]",
     r"思维链(?:路)?[：:]",
     r"思考过程[：:]",
-    r"我需要(?:以|作为|自然地)?",
-    r"可以(?:夸赞|吐槽|回复|调侃)",
+    r"我需要(?:以|作为|使用)(?:普通群友|风又音理|音理|助手).*(?:身份|语气|口吻|角色)",
+    r"我需要(?:以|扮演)(?:风又)?音理",
+    r"可以(?:夸赞|吐槽|回复|调侃)(?:一下|对方|群友|用户)",
     r"Thinking Process",
     r"Thought Process",
     r"The user\s+(?:is|sent|shared|mentioned|said|wants|asked)",
@@ -234,7 +235,16 @@ class TTSClient:
 
         self.is_synthesizing = True
         try:
-            target_lang = lang or cfg.text_lang
+            if not lang:
+                # 自动检测语言：若未显式指定，且文本中无日文假名（纯汉字），自适应为中文合成
+                has_kana = bool(re.search(r"[\u3040-\u309f\u30a0-\u30ff]", text))
+                if not has_kana and re.search(r"[\u4e00-\u9fff]", text):
+                    target_lang = "zh"
+                else:
+                    target_lang = cfg.text_lang or "ja"
+            else:
+                target_lang = lang
+
             ref_file = Path(cfg.ref_audio_path)
             if not ref_file.is_absolute():
                 ref_file = (Path(__file__).parent.parent / ref_file).resolve()
@@ -249,7 +259,8 @@ class TTSClient:
                 "prompt_lang": cfg.prompt_lang,
                 "text": text.strip(),
                 "text_lang": target_lang,
-                "text_split_method": "cut0",
+                "text_split_method": "cut5",
+                "parallel_infer": "false",
                 "streaming_mode": "false",
                 "media_type": "wav",
                 "speed_factor": cfg.speed_factor,
@@ -262,7 +273,7 @@ class TTSClient:
             if not cache_file.exists():
                 api_url = cfg.api_url.split("?")[0]
                 full_url = f"{api_url}?{urllib.parse.urlencode(params)}"
-                async with httpx.AsyncClient(timeout=45.0) as client:
+                async with httpx.AsyncClient(timeout=120.0) as client:
                     resp = await client.get(full_url)
                     if resp.status_code != 200:
                         print(f"[TTS] 合成失败 [HTTP {resp.status_code}]: {resp.text[:200]}")
@@ -278,7 +289,7 @@ class TTSClient:
                 abs_path = os.path.abspath(str(cache_file)).replace("\\", "/")
                 return f"file:///{abs_path}"
         except Exception as e:
-            print(f"[TTS] 请求本地语音合成服务出错: {e}")
+            print(f"[TTS] 请求本地语音合成服务出错: {type(e).__name__}: {e}")
             return None
         finally:
             self.is_synthesizing = False

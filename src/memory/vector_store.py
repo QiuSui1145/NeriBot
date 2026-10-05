@@ -79,6 +79,36 @@ class HybridEmbeddingFunction(EmbeddingFunction):
         dim = 512 if self.local_model is not None or self.local_model_path.exists() else 1536
         return [[0.0] * dim for _ in input]
 
+
+CANON_MEMORIES = [
+    {
+        "content": "【核心经历·岩手县画室与五百日元誓约】哥哥（钟城晓）遭遇动画作画崩坏被监督甩锅与全网舆论霸凌，失意回到岩手县老家小画室自暴自弃。音理作为房东女儿每天拿备用钥匙来打扫满是松节油和变质泡面的房间，做特大号烤鲑鱼酸梅饭团逼他吃。在晓想放弃画笔时，音理拿出仅有的五百日元硬币买下第一张练习明信片，发誓做他一辈子的头号粉丝，并称晓画里的色彩是世界宝箱里最耀眼的珍宝。",
+        "importance": 5.0,
+        "type": "canon_core",
+    },
+    {
+        "content": "【核心经历·三月冷雨与心脏托付】初春三月冷雨天，音理为救黑色幼猫（Noir/诺瓦）车祸脑死亡，在天河综合医院自愿将心脏移植给患病并被严苛管束的白化病少女夜羽真白（诺瓦尔）。音理无怨无悔，唯一遗憾是没能陪晓度过那个盛夏看他画出许诺的新生蔚蓝天空。",
+        "importance": 5.0,
+        "type": "canon_core",
+    },
+    {
+        "content": "【核心经历·晓的中暑脱水与器官捐献】晓因音理离世精神彻底崩溃长日闭门绝望酗酒，盛夏在密闭房间因脱水中暑心肺停止逝世。死前手中握着签有器官捐献的驾照，器官同样移植给了真白，两人在真白体内生死重聚。花江（女演员/一氧化碳中毒）、吉比耶（体温调节障碍少女）、高濑（智囊）同样因故去世并将器官捐献给真白。",
+        "importance": 5.0,
+        "type": "canon_core",
+    },
+    {
+        "content": "【核心经历·星空列车决战与真白重生】真白潜意识的银河号星空列车中，献血者猫村春香（狩叶）为乘务员（血液循环引导者），各器官捐献者（音理、晓、花江、吉比耶、高濑）为乘客。动力停滞危机中，音理、晓与全员用木炭、写生簿纸张与毛毯重燃音理的心脏锅炉，助真白战胜多器官排异反应奇迹生还。",
+        "importance": 5.0,
+        "type": "canon_core",
+    },
+    {
+        "content": "【永恒终局·真白到哪主角团就能到哪】现世真白战胜排异努力复健，准备去坐蒸汽机车，去函馆看五棱郭和天象馆、去北海道、去小笠原群岛、去瑞典周游世界；在真白内心的星空列车上，凉风习习、群星璀璨，音理与晓及伙伴们悠闲度日——真白到哪，主角团就能到哪，生死相依、永不分离。",
+        "importance": 5.0,
+        "type": "canon_core",
+    }
+]
+
+
 class MemoryRetriever:
     def __init__(self, data_path="data/chroma_db"):
         self.data_path = data_path
@@ -86,10 +116,11 @@ class MemoryRetriever:
         self.ef = HybridEmbeddingFunction()
         self.col_name = "neri_memories"
         self._collection = None
+        self._is_seeding_canon = False
         self._ensure_collection()
 
     def _ensure_collection(self):
-        """获取或自愈重连 ChromaDB 集合句柄。"""
+        """获取或自愈重连 ChromaDB 集合句柄，并确保核心剧本记忆固化注入。"""
         if self._collection is not None:
             try:
                 # 心跳探测集合是否存在且 UUID 有效
@@ -117,7 +148,72 @@ class MemoryRetriever:
                 name=self.col_name,
                 embedding_function=self.ef
             )
+
+        # 确保原作核心剧本记忆已写入固化
+        if not getattr(self, "_is_seeding_canon", False):
+            self._is_seeding_canon = True
+            try:
+                self.seed_canon_memories()
+            finally:
+                self._is_seeding_canon = False
+
         return self._collection
+
+    def seed_canon_memories(self, force_reseed: bool = False) -> int:
+        """向 ChromaDB 向量记忆库永久写入《星空列车与白的旅行》原作全真核心剧本记忆。
+        支持针对 Master QQ 与全局索引 (0) 写入高权重不可磨灭的核心记忆。
+        """
+        now = time.time()
+        try:
+            from src.config import config_manager
+            master_uid = config_manager.config.security.master_qq
+        except Exception:
+            master_uid = None
+
+        target_uids = [master_uid, 0] if master_uid else [0]
+        seeded = 0
+
+        for uid in target_uids:
+            try:
+                def _get_canon(col):
+                    return col.get(
+                        where={"$and": [{"user_id": uid}, {"type": "canon_core"}]},
+                        include=["metadatas"]
+                    )
+                existing_res = self._execute_with_retry(_get_canon)
+                existing_count = len(existing_res["ids"]) if existing_res and "ids" in existing_res else 0
+
+                if existing_count >= len(CANON_MEMORIES) and not force_reseed:
+                    continue
+
+                if force_reseed and existing_res and existing_res.get("ids"):
+                    self._execute_with_retry(lambda col: col.delete(ids=existing_res["ids"]))
+
+                for idx, item in enumerate(CANON_MEMORIES, 1):
+                    cid = f"canon_{uid}_{idx}"
+                    def _add_canon(col, text=item["content"], cid=cid):
+                        col.add(
+                            documents=[text],
+                            metadatas=[{
+                                "user_id": uid,
+                                "type": "canon_core",
+                                "importance": 5.0,
+                                "created_at": now,
+                                "last_accessed": now,
+                                "access_count": 1,
+                                "is_forgotten": False,
+                                "is_immutable": True
+                            }],
+                            ids=[cid]
+                        )
+                    self._execute_with_retry(_add_canon)
+                    seeded += 1
+            except Exception as e:
+                print(f"[VectorDB] 为 user_id={uid} 固化核心剧本记忆异常: {e}")
+
+        if seeded > 0:
+            print(f"[VectorDB] 原作核心剧本记忆固化写入完毕，注入了 {seeded} 条核心记忆！")
+        return seeded
 
     @property
     def collection(self):
@@ -163,52 +259,129 @@ class MemoryRetriever:
 
         self._execute_with_retry(_do_add)
         print(f"[VectorDB] 成功写入记忆碎片: {text[:15]}...")
+
+        # 每新增若干条记忆，自动轻量执行遗忘衰减与归档，淘汰失效记忆
+        self._add_counter = getattr(self, "_add_counter", 0) + 1
+        if self._add_counter % 5 == 0:
+            try:
+                self.apply_forgetting_curve()
+            except Exception as e:
+                print(f"[VectorDB] 自动遗忘衰减执行异常: {e}")
+
         return mem_id
         
     def search_relevant_memories(self, user_id: int, query: str, top_k: int = 3) -> list[str]:
+        """语义相关度检索召回。
+        引入严格语义相关门槛（过滤无关日常寒暄）与时间衰减因子，杜绝盲目召回陈旧记忆导致胡言乱语。
+        """
         now = time.time()
         try:
             user_id = int(user_id)
         except Exception:
             user_id = 0
 
-        def _do_query(col):
-            return col.query(
-                query_texts=[query],
+        # 如果输入过短或为无意义纯符号，直接跳过召回
+        clean_q = query.strip()
+        if len(clean_q) < 2 or not clean_q.strip(" .。…，,！!？?~～-_`'\""):
+            return []
+
+        # 定期轻量触发自动遗忘整理
+        self._search_count = getattr(self, "_search_count", 0) + 1
+        if self._search_count % 10 == 0:
+            try:
+                self.apply_forgetting_curve()
+            except Exception:
+                pass
+
+        # 支持同时检索当前用户与全局(0)核心记忆
+        def _do_query(target_uid):
+            return self._execute_with_retry(lambda col: col.query(
+                query_texts=[clean_q],
                 n_results=top_k * 3,
-                where={"$and": [{"user_id": user_id}, {"is_forgotten": False}]}
-            )
+                where={"$and": [{"user_id": target_uid}, {"is_forgotten": False}]}
+            ))
 
         try:
-            results = self._execute_with_retry(_do_query)
+            results_user = _do_query(user_id)
         except Exception as e:
             print(f"[VectorDB] 召回查询异常: {e}")
+            results_user = None
+
+        results_global = None
+        if user_id != 0:
+            try:
+                results_global = _do_query(0)
+            except Exception:
+                pass
+
+        docs = []
+        metas = []
+        ids = []
+        distances = []
+        seen_ids = set()
+
+        for res in [results_user, results_global]:
+            if not res or not res.get('documents') or not res['documents'][0]:
+                continue
+            for d, m, mid, dist in zip(res['documents'][0], res['metadatas'][0], res['ids'][0], res.get('distances', [[]])[0]):
+                if mid not in seen_ids:
+                    seen_ids.add(mid)
+                    docs.append(d)
+                    metas.append(m or {})
+                    ids.append(mid)
+                    distances.append(dist if dist is not None else 0.0)
+
+        if not docs:
             return []
-            
-        if not results or not results.get('documents') or not results['documents'][0]:
-            return []
-            
-        docs = results['documents'][0]
-        metas = results['metadatas'][0]
-        ids = results['ids'][0]
-        distances = results['distances'][0] if 'distances' in results and results['distances'] else [0]*len(docs)
-        
+
+        MIN_SIMILARITY_THRESHOLD = 0.53  # 严格相似度门槛（相当于余弦距离 <= 0.88），过滤无关闲聊
         scored_mems = []
+
         for doc, meta, mem_id, dist in zip(docs, metas, ids, distances):
-            if not meta:
-                meta = {}
-            importance = meta.get('importance', 1.0)
-            access_count = meta.get('access_count', 1)
-            last_accessed = meta.get('last_accessed', now)
-            days_passed = (now - last_accessed) / (24 * 3600)
-            retention = importance * math.exp(-0.1 * max(0.0, days_passed)) + (access_count * 0.2)
+            if meta.get("is_forgotten", False):
+                continue
+
+            importance = float(meta.get('importance', 1.0))
+            mem_type = meta.get('type', 'episode')
+            is_canon = (mem_type == "canon_core") or (importance >= 5.0 and meta.get("is_immutable", False))
+
+            access_count = int(meta.get('access_count', 1))
+            last_accessed = float(meta.get('last_accessed', now))
+            created_at = float(meta.get('created_at', now))
+
+            days_passed = max(0.0, (now - last_accessed) / (24 * 3600))
+            created_days = max(0.0, (now - created_at) / (24 * 3600))
+
+            half_life_days = max(1.0, (importance ** 1.5) * 2.5 * (1.0 + math.log1p(access_count) * 0.35))
+            retention = importance * math.exp(-0.693 * days_passed / half_life_days)
+
+            # 动态归档淘汰：对严重衰减的低价值记忆顺手标记遗忘
+            if not is_canon and ((importance <= 2.0 and days_passed > 5.0) or retention < 0.8):
+                meta['is_forgotten'] = True
+                try:
+                    self._execute_with_retry(lambda col: col.update(ids=[mem_id], metadatas=[meta]))
+                except Exception:
+                    pass
+                continue
+
             sim_score = 1.0 / (1.0 + max(0.0, dist))
-            final_score = sim_score * 0.7 + (retention / 10.0) * 0.3
+
+            # 门槛拦截：如果与提问内容语义相关性不足，坚决放弃召回，避免胡言乱语
+            min_thresh = 0.49 if is_canon else MIN_SIMILARITY_THRESHOLD
+            if sim_score < min_thresh:
+                continue
+
+            # 时间衰减惩罚：很久以前发生的情景事件在日常对话中权重大幅降低
+            time_penalty = 1.0
+            if not is_canon and created_days > 7.0:
+                time_penalty = math.exp(-0.02 * (created_days - 7.0))
+
+            final_score = (sim_score * 0.75 + (retention / 10.0) * 0.25) * time_penalty
             scored_mems.append((final_score, doc, meta, mem_id))
-            
+
         scored_mems.sort(key=lambda x: x[0], reverse=True)
         top_mems = scored_mems[:top_k]
-        
+
         update_ids = []
         update_metas = []
         ret_texts = []
@@ -218,16 +391,19 @@ class MemoryRetriever:
             meta['last_accessed'] = now
             update_ids.append(mem_id)
             update_metas.append(meta)
-            
+
         if update_ids:
             try:
                 self._execute_with_retry(lambda col: col.update(ids=update_ids, metadatas=update_metas))
             except Exception as e:
                 print(f"[VectorDB] 更新记忆访问统计失败: {e}")
-            
+
         return ret_texts
 
-    def apply_forgetting_curve(self, threshold: float = 0.5):
+    def apply_forgetting_curve(self, threshold: float = 1.0):
+        """根据艾宾浩斯认知遗忘模型自动归档老化/低价值记忆碎片。
+        核心剧本记忆（canon_core）及重要度>=5.0享有永恒固化特权，绝不被遗忘。
+        """
         try:
             results = self._execute_with_retry(lambda col: col.get(where={"is_forgotten": False}))
         except Exception as e:
@@ -244,13 +420,40 @@ class MemoryRetriever:
         for mem_id, meta in zip(results['ids'], results['metadatas']):
             if not meta:
                 continue
-            importance = meta.get('importance', 1.0)
-            access_count = meta.get('access_count', 1)
-            last_accessed = meta.get('last_accessed', now)
-            days_passed = (now - last_accessed) / (24 * 3600)
-            retention = importance * math.exp(-0.1 * max(0.0, days_passed)) + (access_count * 0.2)
-            
+            # 核心剧本记忆与最高权重永久免疫遗忘
+            if meta.get("type") == "canon_core" or meta.get("is_immutable") or meta.get("importance", 1.0) >= 5.0:
+                continue
+
+            importance = float(meta.get('importance', 1.0))
+            access_count = int(meta.get('access_count', 1))
+            last_accessed = float(meta.get('last_accessed', now))
+            created_at = float(meta.get('created_at', now))
+
+            days_passed = max(0.0, (now - last_accessed) / (24 * 3600))
+            created_days = max(0.0, (now - created_at) / (24 * 3600))
+
+            # 动态半衰期衰减模型（天数）：重要度 1 级约 2.5 天；重要度 2 级约 7 天；重要度 3 级约 13 天；重要度 4 级约 20 天
+            # 访问次数增加能增强记忆牢固度（延长半衰期），但不会形成不衰减的永久底线
+            half_life_days = max(1.0, (importance ** 1.5) * 2.5 * (1.0 + math.log1p(access_count) * 0.35))
+            retention = importance * math.exp(-0.693 * days_passed / half_life_days)
+
+            # 对很久之前创建且未成为核心设定的情景记忆，施加创建时长二次归档衰减
+            if created_days > 14 and importance < 3.5:
+                retention *= math.exp(-0.03 * (created_days - 14))
+
+            # 综合判定遗忘归档：
+            # 1. 留存得分跌破阈值 (默认 1.0)
+            # 2. 或者低重要度记忆 (<= 2.0) 超过 5 天未被再次激活
+            # 3. 或者非核心记忆创建超过 30 天且几乎没有重复访问 (access_count <= 2 且 importance < 4.0)
+            should_forget = False
             if retention < threshold:
+                should_forget = True
+            elif importance <= 2.0 and days_passed > 5.0:
+                should_forget = True
+            elif importance < 3.5 and created_days > 30.0 and access_count <= 2:
+                should_forget = True
+
+            if should_forget:
                 meta['is_forgotten'] = True
                 forget_ids.append(mem_id)
                 forget_metas.append(meta)
@@ -258,7 +461,7 @@ class MemoryRetriever:
         if forget_ids:
             try:
                 self._execute_with_retry(lambda col: col.update(ids=forget_ids, metadatas=forget_metas))
-                print(f"[VectorDB] 遗忘机制执行完毕，归档了 {len(forget_ids)} 条记忆碎片。")
+                print(f"[VectorDB] 遗忘与自动归档机制执行完毕，成功归档了 {len(forget_ids)} 条陈旧或低价值记忆碎片。")
             except Exception as e:
                 print(f"[VectorDB] 遗忘标记更新失败: {e}")
         return len(forget_ids)
@@ -503,6 +706,16 @@ class MemoryRetriever:
             return False
 
     def delete_memory(self, mem_id: str, hard: bool = False) -> bool:
+        try:
+            res = self._execute_with_retry(lambda col: col.get(ids=[mem_id], include=["metadatas"]))
+            if res and res.get("metadatas") and res["metadatas"][0]:
+                meta = res["metadatas"][0]
+                if meta.get("type") == "canon_core" or meta.get("is_immutable"):
+                    print(f"[VectorDB] 核心剧情记忆 ({mem_id}) 受系统不可磨灭保护，禁止删除！")
+                    return False
+        except Exception as e:
+            print(f"[VectorDB] 检查删除目标异常: {e}")
+
         if hard:
             try:
                 self._execute_with_retry(lambda col: col.delete(ids=[mem_id]))
@@ -544,46 +757,84 @@ class MemoryRetriever:
         except Exception:
             user_id = 0
 
-        def _do_query(col):
-            return col.query(
-                query_texts=[query],
+        clean_q = query.strip()
+        if not clean_q:
+            return []
+
+        def _do_query(target_uid):
+            return self._execute_with_retry(lambda col: col.query(
+                query_texts=[clean_q],
                 n_results=min(top_k * 4, 30),
-                where={"user_id": user_id} if user_id != 0 else None
-            )
+                where={"user_id": target_uid} if target_uid != 0 else None
+            ))
 
         try:
-            results = self._execute_with_retry(_do_query)
+            results_user = _do_query(user_id)
         except Exception as e:
             print(f"[VectorDB Simulator] 查询异常: {e}")
+            results_user = None
+
+        results_global = None
+        if user_id != 0:
+            try:
+                results_global = _do_query(0)
+            except Exception:
+                pass
+
+        docs = []
+        metas = []
+        ids = []
+        distances = []
+        seen_ids = set()
+
+        for res in [results_user, results_global]:
+            if not res or not res.get('documents') or not res['documents'][0]:
+                continue
+            for d, m, mid, dist in zip(res['documents'][0], res['metadatas'][0], res['ids'][0], res.get('distances', [[]])[0]):
+                if mid not in seen_ids:
+                    seen_ids.add(mid)
+                    docs.append(d)
+                    metas.append(m or {})
+                    ids.append(mid)
+                    distances.append(dist if dist is not None else 0.0)
+
+        if not docs:
             return []
-            
-        if not results or not results.get('documents') or not results['documents'][0]:
-            return []
-            
-        docs = results['documents'][0]
-        metas = results['metadatas'][0]
-        ids = results['ids'][0]
-        distances = results['distances'][0] if 'distances' in results and results['distances'] else [0]*len(docs)
-        
+
         scored = []
         now = time.time()
         for doc, meta, mem_id, dist in zip(docs, metas, ids, distances):
             if not meta:
                 meta = {}
-            importance = meta.get('importance', 1.0)
-            access_count = meta.get('access_count', 1)
-            last_accessed = meta.get('last_accessed', now)
-            days_passed = (now - last_accessed) / (24 * 3600)
-            
-            retention = importance * math.exp(-lambda_decay * max(0.0, days_passed)) + (access_count * 0.2)
+            importance = float(meta.get('importance', 1.0))
+            mem_type = meta.get('type', 'episode')
+            is_canon = (mem_type == "canon_core") or (importance >= 5.0 and meta.get("is_immutable", False))
+
+            access_count = int(meta.get('access_count', 1))
+            last_accessed = float(meta.get('last_accessed', now))
+            created_at = float(meta.get('created_at', now))
+
+            days_passed = max(0.0, (now - last_accessed) / (24 * 3600))
+            created_days = max(0.0, (now - created_at) / (24 * 3600))
+
+            half_life_days = max(1.0, (importance ** 1.5) * 2.5 * (1.0 + math.log1p(access_count) * 0.35))
+            retention = importance * math.exp(-0.693 * days_passed / half_life_days)
+            if created_days > 14 and not is_canon:
+                retention *= math.exp(-0.03 * (created_days - 14))
+
             sim_score = 1.0 / (1.0 + max(0.0, dist))
-            final_score = sim_score * weight_sim + (retention / 10.0) * (1.0 - weight_sim)
-            
+
+            time_penalty = 1.0
+            if not is_canon and created_days > 7.0:
+                time_penalty = math.exp(-0.02 * (created_days - 7.0))
+
+            final_score = (sim_score * weight_sim + (retention / 10.0) * (1.0 - weight_sim)) * time_penalty
+
             scored.append({
                 "id": mem_id,
                 "user_id": meta.get("user_id", user_id),
                 "content": doc,
-                "type": meta.get("type", "episode"),
+                "type": mem_type,
                 "importance": importance,
                 "is_forgotten": meta.get("is_forgotten", False),
                 "distance": round(dist, 4),
@@ -594,7 +845,7 @@ class MemoryRetriever:
                 "final_score": round(final_score, 4),
                 "rank": 0
             })
-            
+
         scored.sort(key=lambda x: x["final_score"], reverse=True)
         for idx, item in enumerate(scored):
             item["rank"] = idx + 1
@@ -647,7 +898,7 @@ class MemoryRetriever:
         return {"nodes": nodes, "links": links}
 
     def reset_to_factory_defaults(self) -> dict:
-        """彻底清空全部记忆碎片并还原到出厂初始状态（不留任何预置或残留记忆）。"""
+        """清空用户动态生成的记忆碎片，并完全重置恢复至出厂预置核心剧本记忆。"""
         cleared_count = 0
         def _clear(col):
             res = col.get()
@@ -658,9 +909,9 @@ class MemoryRetriever:
 
         try:
             cleared_count = self._execute_with_retry(_clear)
-            print(f"[VectorDB] 出厂初始化完成，已彻底清空全部记忆库 (清除了 {cleared_count} 条，UUID 保持不变)！")
+            print(f"[VectorDB] 动态记忆库清空完成 (移除了 {cleared_count} 条)！")
         except Exception as e:
-            print(f"[VectorDB] 清空已有数据异常 ({e})，尝试重建集合...")
+            print(f"[VectorDB] 清空已有数据异常 ({e})，正在自愈重建集合...")
             try:
                 self.client.delete_collection(self.col_name)
             except Exception:
@@ -668,12 +919,14 @@ class MemoryRetriever:
             self._collection = None
             _ = self.collection
 
+        # 立即强制重铸写入原作核心剧情记忆！
+        seeded_count = self.seed_canon_memories(force_reseed=True)
         return {
             "status": "ok",
-            "count": 0,
-            "inserted": 0,
+            "count": seeded_count,
+            "inserted": seeded_count,
             "deleted": cleared_count,
-            "message": "记忆系统已重置恢复至纯净出厂状态，全部记忆信息已彻底清空！"
+            "message": f"记忆系统已重置完毕：动态用户记忆已彻底清空（{cleared_count}条），原作全真核心剧情设定（{seeded_count}条，含五百日元誓约、器官托付、星空列车决战、真白终局）已完成出厂固化重铸！"
         }
 
     def export_memories_archive(self) -> tuple[bytes, str]:

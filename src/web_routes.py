@@ -617,6 +617,9 @@ async def test_chat(req: SandboxChatRequest, _: str = Depends(require_auth)):
     except Exception:
         pass
 
+    from src.prompting import get_tts_anchor_rules
+    sys_prompt += "\n\n" + get_tts_anchor_rules()
+
     messages = [{"role": "system", "content": sys_prompt}]
     if req.messages and isinstance(req.messages, list):
         for m in req.messages:
@@ -629,8 +632,14 @@ async def test_chat(req: SandboxChatRequest, _: str = Depends(require_auth)):
     else:
         messages.append({"role": "user", "content": req.message})
 
-    from src.prompting import get_tts_anchor_rules
-    messages.append({"role": "system", "content": get_tts_anchor_rules()})
+    # 为沙盒对话末尾注入对白引导锚点，与真实私聊体验 100% 对齐
+    cue_suffix = (
+        "\n（请音理以第一人称口吻对白回复哥哥，严禁任何思考分析过程，以 [TEXT] 标签包裹中文回复，以 [VOICE] 标签包裹日文配音）："
+        if is_simultaneous
+        else "\n（请音理以第一人称口吻直接回复哥哥，严禁输出任何思考或分析过程）："
+    )
+    if messages and messages[-1].get("role") == "user":
+        messages[-1]["content"] += cue_suffix
 
     try:
         reply_raw, usage = await llm_client.chat_completion(
@@ -645,7 +654,7 @@ async def test_chat(req: SandboxChatRequest, _: str = Depends(require_auth)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"LLM 请求失败: {e}")
 
-    if is_simultaneous:
+    if is_simultaneous or "[TEXT]" in reply_raw.upper():
         display_text, voice_text = tts_client.parse_dual_track(reply_raw)
     else:
         display_text = tts_client._clean_text(reply_raw)

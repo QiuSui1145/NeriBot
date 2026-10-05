@@ -436,6 +436,74 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(dispatched_messages[0][1].get("display_text"), "诶？音理刚才走神了一下下……")
         self.assertNotIn("The user", dispatched_messages[0][1].get("display_text", ""))
 
+    async def test_normal_dialogue_without_text_tag_passes_in_simultaneous_mode(self):
+        # 核心回归测试：当大模型输出了正常的纯中文角色对白（未显式带 [TEXT] 标签）时，
+        # 系统绝不可误判拦截吞消息，必须自动格式包装为双轨并正常发送真实对白！
+        test_group = 1050415927
+        test_user = 1198728532
+        sess = context_manager.get_session("group", test_group)
+        sess.clear()
+
+        normal_chinese_dialogue = "哥哥怎么突然问起时间来啦……现在才下午三点多呢，是想和音理一起玩游戏了吗？"
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        event = {
+            "post_type": "message",
+            "message_type": "group",
+            "sub_type": "normal",
+            "message_id": 77777,
+            "group_id": test_group,
+            "user_id": test_user,
+            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "raw_message": "音理，现在几点了",
+            "message": "音理，现在几点了",
+        }
+
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(normal_chinese_dialogue, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        self.assertEqual(len(dispatched_messages), 1)
+        disp = dispatched_messages[0][1].get("display_text")
+        self.assertIn("哥哥怎么突然问起时间来啦", disp)
+        self.assertNotIn("走神了一下下", disp)
+
+    async def test_private_chat_normal_dialogue_without_text_tag_passes(self):
+        # 私聊场景：大模型输出纯中文对白时，自动兼容双轨格式，绝不降级走神
+        test_user = 1198728532
+        sess = context_manager.get_session("private", test_user)
+        sess.clear()
+
+        normal_chinese_dialogue = "哥哥怎么突然问起时间来啦……现在才下午三点多呢，是想和音理一起玩游戏了吗？"
+
+        dispatched_messages = []
+        async def mock_dispatch(*args, **kwargs):
+            dispatched_messages.append((args, kwargs))
+
+        event = {
+            "post_type": "message",
+            "message_type": "private",
+            "sub_type": "friend",
+            "message_id": 88888,
+            "user_id": test_user,
+            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "raw_message": "现在几点了",
+            "message": "现在几点了",
+        }
+
+        with patch("src.llm_client.llm_client.chat_completion", new=AsyncMock(return_value=(normal_chinese_dialogue, {}))), \
+             patch.object(bot_service, "_dispatch_output", new=mock_dispatch):
+            await bot_service.on_message(event)
+
+        self.assertEqual(len(dispatched_messages), 1)
+        disp = dispatched_messages[0][1].get("display_text")
+        self.assertIn("哥哥怎么突然问起时间来啦", disp)
+        self.assertNotIn("走神了一下下", disp)
+
 
 if __name__ == "__main__":
     unittest.main()
+

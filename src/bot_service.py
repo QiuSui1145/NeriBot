@@ -446,29 +446,49 @@ class BotService:
 
         llm_messages = sess.get_llm_messages(system_prompt, supports_vision=supports_vision)
 
+        # 寻找最近一条 user 消息注入对白强硬锚点
+        target_user_msg = None
+        for m in reversed(llm_messages):
+            if m.get("role") == "user":
+                target_user_msg = m
+                break
+
         if is_active_reply:
             llm_messages.append({
                 "role": "user",
                 "content": "（音理看到群友们的闲聊，自然插话吐槽，第一字必须是 [TEXT] 开口）："
             })
         elif session_type == "group":
-            # 群聊环境下在末尾注入角色对白强硬锚点，杜绝指令模型将多方对话误判为分析材料
-            if llm_messages and llm_messages[-1]["role"] == "user":
-                last_m = llm_messages[-1]
-                target_identity = (
-                    f"正在对你唯一的哥哥（当前群昵称：{nickname}）说话，必须亲切称呼对方为“哥哥”（お兄ちゃん，绝对严禁直呼其群昵称‘{nickname}’）"
-                    if is_master
-                    else f"正在与群友【{nickname}】交流，以活泼元气口吻直呼其昵称，严禁叫对方哥哥"
-                )
-                cue_suffix = (
-                    f"\n（音理以第一人称对白回复，{target_identity}，严禁任何思考分析过程，第一字必须以 [TEXT] 标签开头）："
-                    if is_simultaneous
-                    else f"\n（请音理以第一人称口吻直接回复台词，{target_identity}，严禁输出任何思考或分析过程）："
-                )
-                if isinstance(last_m.get("content"), str):
-                    last_m["content"] += cue_suffix
-                elif isinstance(last_m.get("content"), list):
-                    last_m["content"].append({"type": "text", "text": cue_suffix})
+            target_identity = (
+                f"正在对你唯一的哥哥（当前群昵称：{nickname}）说话，必须亲切称呼对方为“哥哥”（お兄ちゃん，绝对严禁直呼其群昵称‘{nickname}’）"
+                if is_master
+                else f"正在与群友【{nickname}】交流，以活泼元气口吻直呼其昵称，严禁叫对方哥哥"
+            )
+            cue_suffix = (
+                f"\n（音理以第一人称对白回复，{target_identity}，严禁任何思考分析过程，第一字必须以 [TEXT] 标签开头）："
+                if is_simultaneous
+                else f"\n（请音理以第一人称口吻直接回复台词，{target_identity}，严禁输出任何思考或分析过程）："
+            )
+            if target_user_msg:
+                if isinstance(target_user_msg.get("content"), str):
+                    target_user_msg["content"] += cue_suffix
+                elif isinstance(target_user_msg.get("content"), list):
+                    target_user_msg["content"].append({"type": "text", "text": cue_suffix})
+            else:
+                llm_messages.append({"role": "user", "content": cue_suffix.strip()})
+        elif session_type == "private":
+            cue_suffix = (
+                "\n（请音理以第一人称口吻对白回复哥哥，严禁任何思考分析过程，以 [TEXT] 标签包裹中文回复，以 [VOICE] 标签包裹日文配音）："
+                if is_simultaneous
+                else "\n（请音理以第一人称口吻直接回复哥哥，严禁输出任何思考或分析过程）："
+            )
+            if target_user_msg:
+                if isinstance(target_user_msg.get("content"), str):
+                    target_user_msg["content"] += cue_suffix
+                elif isinstance(target_user_msg.get("content"), list):
+                    target_user_msg["content"].append({"type": "text", "text": cue_suffix})
+            else:
+                llm_messages.append({"role": "user", "content": cue_suffix.strip()})
 
         # 管道前置 Hook (支持插件外部知识/搜索结果/Prompt动态注入)
         from src.plugins.manager import plugin_manager
@@ -495,15 +515,24 @@ class BotService:
 
             print(f"[LLM Response] len={len(raw_reply)} tokens={usage.get('completion_tokens', 0)} raw: {repr(raw_reply[:160])}")
 
-            # 严格红线检查 1：双轨同传模式下，若模型输出没有包含 [TEXT]，说明大模型极大概率在写推演分析，绝对禁止裸发！
+            # 严格红线检查 1：双轨同传模式下，若模型输出没有包含 [TEXT]，判断是否为推演分析
             if is_simultaneous and "[TEXT]" not in raw_reply.upper():
-                print(f"[BotService 绝对红线拦截] 双轨模式下缺少 [TEXT] 对白标签，判定为思考推演或异常格式，已拦截: {raw_reply[:100]}...")
-                if is_active_reply:
-                    sess.add_message("planner", "执行终止 | 主动回复生成内容未遵循[TEXT]标签规范，判定为分析思路外泄，已静默拦截", user_name="Planner")
-                    context_manager.save()
-                    return
+                cleaned_probe = tts_client.strip_thinking_and_analysis(raw_reply)
+                if tts_client.is_pure_reasoning_or_analysis(cleaned_probe):
+                    print(f"[BotService 绝对红线拦截] 判定为思考推演或异常格式，已拦截: {raw_reply[:100]}...")
+                    if is_active_reply:
+                        sess.add_message("planner", "执行终止 | 主动回复生成内容未遵循[TEXT]标签规范，判定为分析思路外泄，已静默拦截", user_name="Planner")
+                        context_manager.save()
+                        return
+                    else:
+                        raw_reply = "[TEXT]诶？音理刚才走神了一下下……[/TEXT][VOICE]あれ？ちょっとぼーっとしてた……[/VOICE]"
                 else:
-                    raw_reply = "[TEXT]诶？音理刚才走神了一下下……[/TEXT][VOICE]あれ？ちょっとぼーっとしてた……[/VOICE]"
+                    # 正常的角色对白台词！允许正常通过，自动包装为双轨格式
+                    print(f"[BotService 格式兼容] 模型未显式输出 [TEXT] 标签，但判定为正常角色对白，自动兼容处理: {raw_reply[:60]}...")
+                    cleaned_line = tts_client._clean_text(cleaned_probe or raw_reply, is_voice=False)
+                    if not cleaned_line:
+                        cleaned_line = (cleaned_probe or raw_reply).strip()
+                    raw_reply = f"[TEXT]{cleaned_line}[/TEXT][VOICE]{cleaned_line}[/VOICE]"
 
             # 多轮工具调用执行闭环 (Tool Loop)
             max_tool_turns = 3
@@ -668,7 +697,12 @@ class BotService:
             return
 
         # 同声传译模式 (simultaneous) 或 双轨同发 (text_and_voice)
-        target_lang = "ja" if tts_mode == "simultaneous" else tts_lang
+        if tts_mode == "simultaneous":
+            import re
+            has_kana = bool(re.search(r"[\u3040-\u309f\u30a0-\u30ff]", voice_text or ""))
+            target_lang = "ja" if has_kana else "zh"
+        else:
+            target_lang = tts_lang
         tts_task = None
         if voice_text:
             tts_task = asyncio.create_task(tts_client.generate_speech(voice_text, lang=target_lang))
