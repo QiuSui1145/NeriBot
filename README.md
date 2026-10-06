@@ -33,7 +33,7 @@ Powered by **Large Language Models (OpenAI-compatible)**, **GPT-SoVITS simultane
 
 ### ✨ Key Features
 
-- 🎭 **Authentic Galgame-Canon Persona (Tidebound Framework)**
+- 🎭 **Authentic Galgame-Canon Persona**
   - Rejects third-person storybook cliches. Firmly roots Neri's memories in her canonical past: the Iwate art studio and the 500-yen promise, the cold March rain and heart donation to Mashiro, Akira's summer heatstroke and organ donation, and the enduring train reality: *"Wherever Mashiro goes, the train and our journey follow."*
   - Strict negative constraints prevent robotic greetings, emoji leakage, and unearned familial terms with strangers.
 - 🎙️ **Simultaneous Voice Interpretation Dual-Track Protocol**
@@ -138,7 +138,7 @@ Example with **NapCatQQ**:
 
 ### ✨ 核心亮点
 
-- 🎭 **原作全真沉浸人设 (Tidebound 规范)**
+- 🎭 **原作全真沉浸人设**
   - 彻底摒弃传统 AI 角色常见的“第三方说书人/童话童谣腔”，牢固确立**第一人称“音理”**与用户/哥哥（钟城晓）的深厚羁绊与共同经历。
   - 内置五大原作核心编年史记忆锚点：岩手县画室五百日元誓约、三月冷雨救猫心脏托付、晓的中暑脱水与器官捐献、星空列车决战与真白重生、永恒终局（真白到哪主角团就能到哪）。
 - 🎙️ **GPT-SoVITS 拟真同声传译双轨协议**
