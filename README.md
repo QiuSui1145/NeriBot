@@ -87,6 +87,10 @@ Example with **NapCatQQ**:
    - **Access Token**: Leave empty (or match `onebot.access_token` in `config/config.json`).
 4. Save the configuration. NapCat will connect instantly. The status indicator on the WebUI banner will turn **🟢 Online** and display Neri's QQ number and nickname!
 
+> 💡 **Running NapCat via Docker Desktop on Windows?**  
+> Inside Docker containers, `127.0.0.1` refers to the container itself. Please set your WebSocket URL to `ws://host.docker.internal:8088/onebot/v11/ws`.  
+> For complete commands, compose files, and Windows Firewall tips, see the **[Docker NapCat Setup Guide](docs/DOCKER_NAPCAT_GUIDE.md)**.
+
 ---
 
 ### 🔊 GPT-SoVITS TTS Integration
@@ -188,6 +192,10 @@ Example with **NapCatQQ**:
    - **URL / 地址**：`ws://127.0.0.1:8088/onebot/v11/ws`
    - **Token / 密钥**：留空（或与 `config/config.json` 中的 `onebot.access_token` 保持一致）
 4. 保存配置后，NapCat 将自动握手连接。WebUI 控制台顶部的状态指示灯将立即变为 **🟢 已连接 (在线)**，并自动同步当前机器人的 QQ 号与昵称！
+
+> 💡 **在 Windows 环境下使用 Docker Desktop 运行 NapCat？**  
+> 容器内部 `127.0.0.1` 仅代表容器自身，无法直连宿主机。请将反向 WebSocket 地址配置为：`ws://host.docker.internal:8088/onebot/v11/ws`。  
+> 详细的 Docker 启动命令、Compose 模板与 Windows 防火墙入站放行指南，请参阅专门文档 **[Docker Desktop NapCat 对接指南](docs/DOCKER_NAPCAT_GUIDE.md)**。
 
 ---
 

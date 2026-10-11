@@ -57,6 +57,26 @@ class OneBotClient:
     # ---------------- 1. 反向 WebSocket 处理 (NapCat -> Bot) ----------------
     async def handle_reverse_ws(self, websocket: WebSocket):
         """处理 NapCat 反向 WebSocket 连接。"""
+        cfg = config_manager.config.onebot
+        # 若配置了 access_token，则进行校验 (支持 Authorization Header 或 query 参数)
+        expected_token = cfg.access_token.strip() if cfg.access_token else ""
+        if expected_token:
+            auth_header = websocket.headers.get("authorization", "")
+            query_token = websocket.query_params.get("access_token", "")
+            provided_token = ""
+            if auth_header:
+                if auth_header.startswith("Bearer ") or auth_header.startswith("Token "):
+                    provided_token = auth_header.split(" ", 1)[1].strip()
+                else:
+                    provided_token = auth_header.strip()
+            elif query_token:
+                provided_token = query_token.strip()
+
+            if provided_token != expected_token:
+                print(f"[OneBot11] 反向 WS 鉴权失败: 提供的 Token 不匹配，拒绝连接！")
+                await websocket.close(code=1008)
+                return
+
         await websocket.accept()
         self.active_reverse_ws = websocket
         self.reverse_connected = True
@@ -84,6 +104,44 @@ class OneBotClient:
         """启动正向 WebSocket 客户端常驻重连协程。"""
         if self._forward_task is None or self._forward_task.done():
             self._forward_task = asyncio.create_task(self._forward_ws_loop())
+
+    async def reload_config(self):
+        """配置更新时热重载 OneBot 客户端连接。"""
+        print("[OneBot11] 收到配置热重载指令，正在重新建立连接...")
+        # 1. 安全关闭现有的正向 WebSocket 连接
+        if self.active_forward_ws:
+            try:
+                await self.active_forward_ws.close()
+            except Exception as e:
+                print(f"[OneBot11] 关闭旧正向 WS 连接提示: {e}")
+            self.active_forward_ws = None
+        self.forward_connected = False
+
+        # 2. 如果当前模式变为仅正向 (forward_ws)，主动断开反向连接
+        cfg = config_manager.config.onebot
+        if self.active_reverse_ws and cfg.mode == "forward_ws":
+            try:
+                await self.active_reverse_ws.close(code=1000)
+            except Exception as e:
+                print(f"[OneBot11] 断开旧反向 WS 连接提示: {e}")
+            self.active_reverse_ws = None
+            self.reverse_connected = False
+
+        # 3. 取消现有的正向客户端循环协程任务
+        if self._forward_task and not self._forward_task.done():
+            self._forward_task.cancel()
+            try:
+                await self._forward_task
+            except (asyncio.CancelledError, Exception):
+                pass
+            self._forward_task = None
+
+        # 4. 根据最新配置决定是否拉起正向连接
+        if cfg.mode in ["forward_ws", "both"] and cfg.forward_ws_url.strip():
+            self.start_forward_client()
+            print(f"[OneBot11] 已重新拉起正向 WebSocket 任务，目标: {cfg.forward_ws_url}")
+        else:
+            print("[OneBot11] 当前模式无需保持正向 WebSocket 客户端。")
 
     async def _forward_ws_loop(self):
         """正向 WebSocket 客户端循环（断线自动重连）。"""
@@ -119,6 +177,10 @@ class OneBotClient:
                             await self._on_raw_event(payload)
                         except Exception as e:
                             print(f"[OneBot11] 正向WS解析消息出错: {e}")
+            except (asyncio.CancelledError, GeneratorExit):
+                self.active_forward_ws = None
+                self.forward_connected = False
+                break
             except Exception as e:
                 self.active_forward_ws = None
                 self.forward_connected = False

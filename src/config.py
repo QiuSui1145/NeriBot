@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
-CONFIG_FILE_PATH = Path("config/config.json")
+CONFIG_FILE_PATH = Path(__file__).resolve().parent.parent / "config" / "config.json"
 
 
 class LLMConfig(BaseModel):

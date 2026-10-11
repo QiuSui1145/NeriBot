@@ -1907,21 +1907,27 @@
                 </div>
 
                 <div>
-                  <label class="block text-xs font-semibold text-slate-300 mb-1">正向 WebSocket 目标地址 (连接到 NapCat / Docker)</label>
-                  <input type="text" id="cfg-onebot-forward-url" class="input-field font-mono" value="ws://127.0.0.1:3001" placeholder="ws://127.0.0.1:3001 或 ws://172.17.0.2:3001">
-                  <p class="text-[11px] text-slate-400 mt-1">若 NapCat 跑在 Docker 容器并映射了端口，在此填入对应宿主机映射地址或容器IP</p>
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">本机服务监听端口 (WebUI & 反向 WS 端口)</label>
+                  <input type="number" id="cfg-web-port" class="input-field font-mono" value="8088" placeholder="8088">
+                  <p class="text-[11px] text-slate-400 mt-1">控制面板与反向 WS 接收端口（修改端口需重启程序生效）</p>
                 </div>
 
                 <div>
                   <label class="block text-xs font-semibold text-slate-300 mb-1">反向 WebSocket 监听路径 (NapCat 连入)</label>
                   <input type="text" id="cfg-onebot-reverse-path" class="input-field font-mono" value="/onebot/v11/ws">
                   <p class="text-[11px] text-slate-400 mt-1 flex items-center justify-between">
-                    <span>默认监听: <code id="ws-uri-copy" class="text-cyan-400 font-mono">ws://127.0.0.1:8088/onebot/v11/ws</code></span>
+                    <span>完整反向URL: <code id="ws-uri-copy" class="text-cyan-400 font-mono">ws://127.0.0.1:8088/onebot/v11/ws</code></span>
                     <button type="button" id="btn-copy-ws" class="text-xs text-indigo-400 hover:text-indigo-300 underline inline-flex items-center gap-1">
                       <i class="fa-regular fa-copy"></i>
                       <span>复制</span>
                     </button>
                   </p>
+                </div>
+
+                <div class="md:col-span-2">
+                  <label class="block text-xs font-semibold text-slate-300 mb-1">正向 WebSocket 目标地址 (连接到 NapCat / Docker)</label>
+                  <input type="text" id="cfg-onebot-forward-url" class="input-field font-mono" value="ws://127.0.0.1:3001" placeholder="ws://127.0.0.1:3001 或 ws://172.17.0.2:3001">
+                  <p class="text-[11px] text-slate-400 mt-1">若 NapCat 跑在 Docker 容器或本地并开启正向 WS，在此填入对应宿主机映射地址或容器IP。保存后立即自动重连！</p>
                 </div>
               </div>
 
@@ -1942,6 +1948,7 @@
               <div class="space-y-1.5 text-slate-300">
                 <p><b>方案 A（正向连接 - 极简）：</b> 在 Docker 启动 NapCat 时映射正向 ws 端口（如 <code>-p 3001:3001</code>），在上方填入 <code>ws://127.0.0.1:3001</code> 并保存，音理会自动发起持久连接！</p>
                 <p><b>方案 B（反向连接）：</b> 在 NapCat 容器内的网络配置中添加反向 WS，地址填入：<code class="bg-slate-900 px-2 py-0.5 rounded text-cyan-300 font-mono">ws://host.docker.internal:8088/onebot/v11/ws</code>（Windows Docker 环境）或填宿主机局域网 IP。</p>
+                <p class="text-indigo-300/90 pt-1">📖 <b>详细教程：</b> 详见项目文档 <code>docs/DOCKER_NAPCAT_GUIDE.md</code> 获取完整的 Docker 启动参数、Compose 模板与 Windows 防火墙排错清单。</p>
               </div>
             </div>
 

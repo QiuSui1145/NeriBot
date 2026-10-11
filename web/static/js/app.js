@@ -1091,6 +1091,19 @@ document.getElementById("btn-clear-stats").addEventListener("click", async () =>
   }
 });
 
+// 实时更新反向 WS 预览地址
+function updateWsUriPreview() {
+  const portEl = document.getElementById("cfg-web-port");
+  const pathEl = document.getElementById("cfg-onebot-reverse-path");
+  const codeEl = document.getElementById("ws-uri-copy");
+  if (!codeEl) return;
+  const port = (portEl && portEl.value.trim()) || window.location.port || "8088";
+  let path = (pathEl && pathEl.value.trim()) || "/onebot/v11/ws";
+  if (!path.startsWith("/")) path = "/" + path;
+  const host = window.location.hostname || "127.0.0.1";
+  codeEl.textContent = `ws://${host}:${port}${path}`;
+}
+
 // ---------------- 6. 配置加载与表单存取 ----------------
 async function loadConfig() {
   try {
@@ -1204,7 +1217,10 @@ async function loadConfig() {
         }).join('');
       }
     }
-    document.getElementById("cfg-act-whitelist").value = (cfg.active_reply.whitelist || []).join(",");
+    const actWhitelistInput = document.getElementById("cfg-act-whitelist");
+    if (actWhitelistInput) {
+      actWhitelistInput.value = (cfg.active_reply.whitelist || []).join(",");
+    }
     
     if (cfg.active_reply.strategy === "probability") {
       document.getElementById("cfg-act-strat-prob").checked = true;
@@ -1223,10 +1239,15 @@ async function loadConfig() {
     document.getElementById("cfg-act-context").value = cfg.active_reply.max_history_context || 8;
 
     // OneBot 网络连接模式与地址
+    const webPortEl = document.getElementById("cfg-web-port");
+    if (webPortEl) {
+      webPortEl.value = cfg.web?.port || window.location.port || 8088;
+    }
     document.getElementById("cfg-onebot-mode").value = cfg.onebot.mode || "both";
     document.getElementById("cfg-onebot-forward-url").value = cfg.onebot.forward_ws_url || "ws://127.0.0.1:3001";
     document.getElementById("cfg-onebot-reverse-path").value = cfg.onebot.reverse_ws_path || "/onebot/v11/ws";
     document.getElementById("cfg-onebot-token").value = cfg.onebot.access_token || "";
+    updateWsUriPreview();
   } catch (e) {
     console.error("加载配置失败:", e);
   }
@@ -1596,17 +1617,34 @@ function initForms() {
     await saveConfigToServer(payload, "快速指令与主动回复设置已保存！");
   });
 
+  const webPortInput = document.getElementById("cfg-web-port");
+  if (webPortInput) webPortInput.addEventListener("input", updateWsUriPreview);
+  const revPathInput = document.getElementById("cfg-onebot-reverse-path");
+  if (revPathInput) revPathInput.addEventListener("input", updateWsUriPreview);
+
   // 保存 OneBot 网络连接配置
   document.getElementById("btn-save-onebot").addEventListener("click", async () => {
+    const portVal = parseInt(document.getElementById("cfg-web-port")?.value?.trim()) || 8088;
+    let revPath = document.getElementById("cfg-onebot-reverse-path").value.trim();
+    if (revPath && !revPath.startsWith("/") && !revPath.includes("://")) {
+      revPath = "/" + revPath;
+    }
     const payload = {
+      web: {
+        port: portVal,
+      },
       onebot: {
         mode: document.getElementById("cfg-onebot-mode").value,
         forward_ws_url: document.getElementById("cfg-onebot-forward-url").value.trim(),
-        reverse_ws_path: document.getElementById("cfg-onebot-reverse-path").value.trim(),
+        reverse_ws_path: revPath,
         access_token: document.getElementById("cfg-onebot-token").value.trim(),
       },
     };
-    await saveConfigToServer(payload, "OneBot11 连接模式与网络地址已保存生效！");
+    const res = await saveConfigToServer(payload, "OneBot11 连接模式与网络地址已保存生效！");
+    if (res && res.port_changed) {
+      await showAlertDialog(`OneBot 连接设定已保存！\n\n检测到监听端口已修改为【${portVal}】，请在终端重启机器人服务以正式绑定新端口。\n正向连接与其它参数已自动热重载生效！`, "端口变更提示");
+    }
+    await loadConfig();
   });
 
   // 修改密码
@@ -1636,9 +1674,12 @@ function initForms() {
   if (btnCopyWsEl) {
     btnCopyWsEl.addEventListener("click", () => {
       const codeEl = document.getElementById("ws-uri-copy");
-      const code = codeEl ? codeEl.textContent : "ws://127.0.0.1:8088/onebot/v11/ws";
+      const defaultPort = window.location.port || "8088";
+      const code = codeEl ? codeEl.textContent : `ws://127.0.0.1:${defaultPort}/onebot/v11/ws`;
       navigator.clipboard.writeText(code).then(async () => {
-        await showAlertDialog("已复制 NapCat 反向 WebSocket URL 到剪贴板！", "复制成功");
+        await showAlertDialog(`已复制 NapCat 反向 WebSocket URL 到剪贴板：\n${code}`, "复制成功");
+      }).catch(async () => {
+        prompt("请复制以下反向 WebSocket 地址：", code);
       });
     });
   }
@@ -1690,10 +1731,18 @@ async function saveConfigToServer(partialData, successMsg) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(partialData),
     });
-    if (!res.ok) throw new Error("保存接口返回错误");
-    await showAlertDialog(successMsg, "保存成功");
+    if (!res.ok) {
+      const errJson = await res.json().catch(() => ({}));
+      throw new Error(errJson.detail || "保存接口返回错误");
+    }
+    const data = await res.json();
+    if (successMsg && !data.port_changed) {
+      await showAlertDialog(successMsg, "保存成功");
+    }
+    return data;
   } catch (err) {
     await showAlertDialog("保存失败: " + err.message, "保存失败");
+    return null;
   }
 }
 

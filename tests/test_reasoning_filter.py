@@ -15,6 +15,12 @@ from src.tts_client import tts_client
 
 class TestReasoningFilter(unittest.TestCase):
     def setUp(self):
+        from src.config import config_manager
+        cfg = config_manager.config
+        test_group = 123456789
+        if test_group not in cfg.security.group_whitelist:
+            cfg.security.group_whitelist.append(test_group)
+
         # 真实线上 ID 1734 事故样本
         self.incident_sample_1734 = (
             "用户发送了一系列消息，看起来是在群聊中。让我分析一下上下文：\n\n"
@@ -230,9 +236,9 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn("分析", kwargs.get("display_text", ""))
 
     async def test_on_message_wake_word_trigger_full_flow(self):
-        # 针对本次报错样本：来自群 1050415927 [秋穗(1198728532)]: '音理，现在几点了'
-        test_group = 1050415927
-        test_user = 1198728532
+        # 针对本次报错样本：来自群 123456789 [测试用户(10001)]: '音理，现在几点了'
+        test_group = 123456789
+        test_user = 10001
         sess = context_manager.get_session("group", test_group)
         sess.clear()
 
@@ -317,7 +323,7 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
 
     async def test_on_message_group_active_reply_full_flow(self):
         # 测试群聊非@非唤醒，决策模型决定主动回复的完整链路
-        test_group = 1050415927
+        test_group = 123456789
         test_user = 555666
         sess = context_manager.get_session("group", test_group)
         sess.clear()
@@ -364,8 +370,8 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
 
     async def test_user_chat_ellipsis_triggers_fallback(self):
         # 测试当 LLM 回复纯省略号 "..." 或 "[TEXT]...[/TEXT]" 时，系统安全拦截并回退为元气走神台词
-        test_group = 1050415927
-        test_user = 1198728532
+        test_group = 123456789
+        test_user = 10001
         sess = context_manager.get_session("group", test_group)
         sess.clear()
 
@@ -380,7 +386,7 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
             "message_id": 66666,
             "group_id": test_group,
             "user_id": test_user,
-            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "sender": {"nickname": "测试用户", "user_id": test_user},
             "raw_message": "音理，现在几点了",
             "message": "音理，现在几点了",
         }
@@ -395,8 +401,8 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
 
     async def test_user_chat_latest_english_reasoning_triggers_fallback(self):
         # 测试当 LLM 回复最新英文分析泄漏文本时，系统安全拦截并回退为元气走神台词
-        test_group = 1050415927
-        test_user = 1198728532
+        test_group = 123456789
+        test_user = 10001
         sess = context_manager.get_session("group", test_group)
         sess.clear()
 
@@ -423,7 +429,7 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
             "message_id": 55555,
             "group_id": test_group,
             "user_id": test_user,
-            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "sender": {"nickname": "测试用户", "user_id": test_user},
             "raw_message": "音理在吗",
             "message": "音理在吗",
         }
@@ -439,8 +445,13 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
     async def test_normal_dialogue_without_text_tag_passes_in_simultaneous_mode(self):
         # 核心回归测试：当大模型输出了正常的纯中文角色对白（未显式带 [TEXT] 标签）时，
         # 系统绝不可误判拦截吞消息，必须自动格式包装为双轨并正常发送真实对白！
-        test_group = 1050415927
-        test_user = 1198728532
+        test_group = 123456789
+        test_user = 10001
+        from src.config import config_manager
+        cfg = config_manager.config
+        if test_group not in cfg.security.group_whitelist:
+            cfg.security.group_whitelist.append(test_group)
+
         sess = context_manager.get_session("group", test_group)
         sess.clear()
 
@@ -457,7 +468,7 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
             "message_id": 77777,
             "group_id": test_group,
             "user_id": test_user,
-            "sender": {"nickname": "秋穗", "user_id": test_user},
+            "sender": {"nickname": "测试用户", "user_id": test_user},
             "raw_message": "音理，现在几点了",
             "message": "音理，现在几点了",
         }
@@ -473,7 +484,7 @@ class TestBotServiceInterception(unittest.IsolatedAsyncioTestCase):
 
     async def test_private_chat_normal_dialogue_without_text_tag_passes(self):
         # 私聊场景：大模型输出纯中文对白时，自动兼容双轨格式，绝不降级走神
-        test_user = 1198728532
+        test_user = 10001
         sess = context_manager.get_session("private", test_user)
         sess.clear()
 

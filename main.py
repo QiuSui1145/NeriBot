@@ -120,8 +120,9 @@ app.include_router(plugin_router)
 @app.websocket("/")
 @app.websocket("/onebot/v11/ws")
 @app.websocket("/ws")
-async def onebot_ws_endpoint(websocket: WebSocket):
-    """供 NapCat / Go-CQHttp 反向连接的 WebSocket 端点。"""
+@app.websocket("/{full_path:path}")
+async def onebot_ws_endpoint(websocket: WebSocket, full_path: str = ""):
+    """供 NapCat / Go-CQHttp 反向连接的 WebSocket 端点，全面兼容自定义路径与默认路径。"""
     await onebot_client.handle_reverse_ws(websocket)
 
 

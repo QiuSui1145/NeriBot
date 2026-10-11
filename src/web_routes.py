@@ -2,6 +2,7 @@
 涵盖鉴权、实时看板、Token可视化、LLM与模型列表、TTS测试、白名单配置及在线沙盒对话。
 """
 
+import asyncio
 from datetime import datetime
 import os
 from pathlib import Path
@@ -385,8 +386,56 @@ async def update_config(data: dict, _: str = Depends(require_auth)):
     # 保护密码不被空数据覆盖
     if "security" in data and not data["security"].get("admin_password"):
         data["security"]["admin_password"] = config_manager.config.security.admin_password
+
+    # 智能解析容错：检测监听端口与反向路径
+    old_port = config_manager.config.web.port
+    port_changed = False
+
+    if "web" in data and "port" in data["web"]:
+        try:
+            p = int(data["web"]["port"])
+            if p > 0 and p != old_port:
+                port_changed = True
+        except (ValueError, TypeError):
+            pass
+
+    # 容错：如果用户误在反向路径中输入了端口号（例如纯数字 8088 或 :8088）或完整URL
+    if "onebot" in data:
+        ob = data["onebot"]
+        if "reverse_ws_path" in ob and isinstance(ob["reverse_ws_path"], str):
+            rev_path = ob["reverse_ws_path"].strip()
+            if rev_path.isdigit():
+                data.setdefault("web", {})["port"] = int(rev_path)
+                ob["reverse_ws_path"] = "/onebot/v11/ws"
+                if int(rev_path) != old_port:
+                    port_changed = True
+            elif rev_path.startswith(":") and rev_path[1:].isdigit():
+                data.setdefault("web", {})["port"] = int(rev_path[1:])
+                ob["reverse_ws_path"] = "/onebot/v11/ws"
+                if int(rev_path[1:]) != old_port:
+                    port_changed = True
+            elif "://" in rev_path:
+                import urllib.parse
+                parsed = urllib.parse.urlparse(rev_path)
+                if parsed.port and parsed.port != old_port:
+                    data.setdefault("web", {})["port"] = parsed.port
+                    port_changed = True
+                ob["reverse_ws_path"] = parsed.path or "/onebot/v11/ws"
+
+            if not ob["reverse_ws_path"].startswith("/"):
+                ob["reverse_ws_path"] = "/" + ob["reverse_ws_path"]
+
     updated = config_manager.update(data)
-    return {"message": "配置更新成功", "config": updated.model_dump()}
+
+    # 若更新了 OneBot 或 Web 相关配置，异步触发 OneBot 客户端热重载
+    if "onebot" in data or "web" in data:
+        asyncio.create_task(onebot_client.reload_config())
+
+    msg = "配置更新成功"
+    if port_changed:
+        msg = f"配置已保存！检测到监听端口修改为 {updated.web.port}，请重启机器人服务生效；正向连接配置已立即热重载！"
+
+    return {"message": msg, "config": updated.model_dump(), "port_changed": port_changed}
 
 
 # ---------------- 多供应商与系统模型库 ----------------
