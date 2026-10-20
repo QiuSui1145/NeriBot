@@ -48,36 +48,67 @@ class HybridEmbeddingFunction(EmbeddingFunction):
                 self.local_model = None
 
     def __call__(self, input: list[str]) -> list[list[float]]:
-        # 1. 优先使用本地离线向量模型 (高准确度、零延迟、零网络依赖)
-        if self.local_model is not None:
+        from src.config import config_manager
+        cfg = config_manager.config
+        
+        # 获取当前功能分配中指定的嵌入模型
+        embed_cfg = getattr(cfg.model_assignments, "embedding", {}) if hasattr(cfg, "model_assignments") else {}
+        target_model_id = embed_cfg.get("model_id") or "builtin/bge-small-zh-v1.5"
+        expected_dim = embed_cfg.get("dimension") or 512
+
+        # 1. 若配置为内置离线模型，优先使用本地 BGE 模型
+        is_builtin = target_model_id.startswith("builtin") or "bge-small-zh-v1.5" in target_model_id
+        if is_builtin and self.local_model is not None:
             try:
                 vecs = self.local_model.encode(input, normalize_embeddings=True)
                 return vecs.tolist()
             except Exception as e:
-                print(f"[VectorDB] 本地模型推理失败: {e}，尝试远程 API")
+                print(f"[VectorDB] 本地模型推理失败: {e}，将回退远程 API")
 
-        # 2. 回退到远程 OpenAI 兼容的 /embeddings 接口
+        # 2. 调用自定义/远程 OpenAI 兼容的 /embeddings 接口
+        model_item = config_manager.get_model_hub_item(target_model_id)
+        if model_item and not is_builtin:
+            provider = config_manager.get_provider(model_item.provider_id)
+            base_url = (provider.base_url if provider and provider.base_url else cfg.llm.base_url).rstrip("/")
+            api_key = provider.api_key if provider and provider.api_key else cfg.llm.api_key
+            real_model_name = model_item.model_name
+            if model_item.dimension:
+                expected_dim = model_item.dimension
+        else:
+            base_url = cfg.llm.base_url.rstrip("/")
+            api_key = cfg.llm.api_key
+            real_model_name = "bge-small-zh-v1.5"
+
         try:
             import requests
-            from src.config import config_manager
-            cfg = config_manager.config
-            url = cfg.llm.base_url.rstrip('/')
-            if url.endswith('/chat/completions'):
-                url = url.replace('/chat/completions', '')
-            embed_url = f"{url}/embeddings"
-            headers = {"Authorization": f"Bearer {cfg.llm.api_key}", "Content-Type": "application/json"}
-            payload = {"model": "text-embedding-ada-002", "input": input}
+            if base_url.endswith("/chat/completions"):
+                base_url = base_url.replace("/chat/completions", "")
+            if not base_url.endswith("/v1") and "/v1" not in base_url and not base_url.endswith("local"):
+                base_url += "/v1"
+            embed_url = f"{base_url}/embeddings"
+            headers = {"Content-Type": "application/json"}
+            if api_key.strip():
+                headers["Authorization"] = f"Bearer {api_key.strip()}"
+            payload = {"model": real_model_name, "input": input}
             
-            resp = requests.post(embed_url, json=payload, headers=headers, timeout=10)
+            resp = requests.post(embed_url, json=payload, headers=headers, timeout=12)
             if resp.status_code == 200:
                 data = resp.json()
-                return [d["embedding"] for d in data["data"]]
+                if "data" in data and data["data"]:
+                    return [d["embedding"] for d in data["data"]]
         except Exception as e:
-            print(f"[VectorDB] 远程 Embedding API 调用失败: {e}")
-        
-        # 3. 兜底哑向量 (512维)
-        dim = 512 if self.local_model is not None or self.local_model_path.exists() else 1536
-        return [[0.0] * dim for _ in input]
+            print(f"[VectorDB] 远程 Embedding API 调用失败 ({real_model_name}): {e}")
+
+        # 3. 若远程失败且本地可用，回退本地模型
+        if self.local_model is not None:
+            try:
+                vecs = self.local_model.encode(input, normalize_embeddings=True)
+                return vecs.tolist()
+            except Exception:
+                pass
+
+        # 4. 兜底哑向量 (保持期望维度)
+        return [[0.0] * expected_dim for _ in input]
 
 
 CANON_MEMORIES = [
@@ -170,6 +201,11 @@ CANON_MEMORIES = [
 
 
 class MemoryRetriever:
+    def on_embedding_model_changed(self):
+        """当嵌入模型发生变更时重置集合，适配新向量维度并自动重构缓存。"""
+        self._collection = None
+        self._ensure_collection()
+
     def __init__(self, data_path="data/chroma_db"):
         self.data_path = data_path
         self.client = chromadb.PersistentClient(path=data_path)

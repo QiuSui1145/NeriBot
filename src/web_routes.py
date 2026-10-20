@@ -81,6 +81,8 @@ class ModelHubItemRequest(BaseModel):
     provider_id: str
     model_name: str
     display_name: str = ""
+    model_type: str = "llm"
+    dimension: Optional[int] = None
     temperature: float = 0.7
     max_tokens: int = 200
     context_limit: int = 12
@@ -97,6 +99,31 @@ class SetActiveModelRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     active_model_id: Optional[str] = None
     active_decision_model_id: Optional[str] = None
+
+
+class DetectDimensionRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    provider_id: str
+    model_name: str
+    base_url: Optional[str] = None
+    api_key: Optional[str] = None
+
+
+class TestConnectionRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    tag: Optional[str] = None
+    provider_id: Optional[str] = None
+    model_name: Optional[str] = None
+    model_type: str = "llm"
+
+
+class ModelAssignmentsSaveRequest(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    replyer: Optional[Dict[str, Any]] = None
+    planner: Optional[Dict[str, Any]] = None
+    utils: Optional[Dict[str, Any]] = None
+    vlm: Optional[Dict[str, Any]] = None
+    embedding: Optional[Dict[str, Any]] = None
 
 
 class FlowSendRequest(BaseModel):
@@ -499,6 +526,7 @@ async def get_model_hub(_: str = Depends(require_auth)):
         "items": [item.model_dump() for item in cfg.model_hub],
         "active_model_id": cfg.active_model_id or cfg.llm.model,
         "active_decision_model_id": cfg.active_decision_model_id or cfg.decision_llm.model,
+        "model_assignments": cfg.model_assignments.model_dump(),
     }
 
 
@@ -517,11 +545,14 @@ async def save_hub_item(req: ModelHubItemRequest, _: str = Depends(require_auth)
         provider_id=req.provider_id,
         model_name=req.model_name,
         display_name=req.display_name or req.model_name,
+        model_type=req.model_type or "llm",
+        dimension=req.dimension,
         temperature=req.temperature,
         max_tokens=req.max_tokens,
         context_limit=req.context_limit,
         supports_vision=req.supports_vision,
         supports_audio=req.supports_audio,
+        supports_video=req.supports_video,
         prompt_price_per_1m=(req.prompt_price_per_1m if req.prompt_price_per_1m is not None else ((req.prompt_price_per_1k * 1000.0) if req.prompt_price_per_1k is not None else 0.0)),
         completion_price_per_1m=(req.completion_price_per_1m if req.completion_price_per_1m is not None else ((req.completion_price_per_1k * 1000.0) if req.completion_price_per_1k is not None else 0.0)),
         prompt_price_per_1k=(req.prompt_price_per_1k if req.prompt_price_per_1k is not None else ((req.prompt_price_per_1m / 1000.0) if req.prompt_price_per_1m is not None else 0.0)),
@@ -551,10 +582,181 @@ async def set_active_hub_models(req: SetActiveModelRequest, _: str = Depends(req
     cfg = config_manager.config
     if req.active_model_id is not None:
         cfg.active_model_id = req.active_model_id
+        cfg.model_assignments.replyer["model_id"] = req.active_model_id
     if req.active_decision_model_id is not None:
         cfg.active_decision_model_id = req.active_decision_model_id
+        cfg.model_assignments.planner["model_id"] = req.active_decision_model_id
     config_manager.save()
     return {"message": "当前主聊天/决策模型已更新"}
+
+
+@router.post("/api/llm/detect_dimension")
+async def detect_dimension(req: DetectDimensionRequest, _: str = Depends(require_auth)):
+    if req.provider_id == "builtin" or req.model_name in ("bge-small-zh-v1.5", "BAAI/bge-small-zh-v1.5"):
+        return {
+            "dimension": 512,
+            "model_name": req.model_name,
+            "message": "内置离线向量模型探测成功 (512维)",
+            "status": "success"
+        }
+
+    cfg = config_manager.config
+    provider = cfg.get_provider(req.provider_id)
+    b_url = req.base_url or (provider.base_url if provider else cfg.llm.base_url)
+    a_key = req.api_key if req.api_key is not None else (provider.api_key if provider else cfg.llm.api_key)
+
+    target_base = llm_client._normalize_base_url(b_url)
+    endpoint = f"{target_base}/embeddings"
+    headers = {"Content-Type": "application/json"}
+    if a_key.strip():
+        headers["Authorization"] = f"Bearer {a_key.strip()}"
+
+    payload = {
+        "model": req.model_name,
+        "input": ["test probe dimension"]
+    }
+
+    try:
+        import httpx
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            resp = await client.post(endpoint, json=payload, headers=headers)
+        if resp.status_code != 200:
+            raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:300]}")
+        data = resp.json()
+        vecs = data.get("data", [])
+        if not vecs or "embedding" not in vecs[0]:
+            raise RuntimeError(f"上游返回异常格式: {str(data)[:200]}")
+        dim = len(vecs[0]["embedding"])
+        return {
+            "dimension": dim,
+            "model_name": req.model_name,
+            "message": f"成功探测到嵌入模型「{req.model_name}」输出维度: {dim}维",
+            "status": "success"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"维度探测失败: {e}")
+
+
+@router.post("/api/llm/test_connection")
+async def test_model_connection(req: TestConnectionRequest, _: str = Depends(require_auth)):
+    import time
+    cfg = config_manager.config
+    model_item = config_manager.get_model_hub_item(req.tag) if req.tag else None
+    
+    provider_id = req.provider_id or (model_item.provider_id if model_item else "default")
+    model_name = req.model_name or (model_item.model_name if model_item else "")
+    model_type = req.model_type or (model_item.model_type if model_item else "llm")
+    
+    if provider_id == "builtin" or model_name in ("bge-small-zh-v1.5", "BAAI/bge-small-zh-v1.5"):
+        return {
+            "status": "success",
+            "latency_ms": 1,
+            "dimension": 512,
+            "message": "内置离线嵌入模型就绪，运行良好 (512维)"
+        }
+
+    provider = cfg.get_provider(provider_id)
+    b_url = provider.base_url if provider and provider.base_url else cfg.llm.base_url
+    a_key = provider.api_key if provider and provider.api_key else cfg.llm.api_key
+    target_base = llm_client._normalize_base_url(b_url)
+
+    start_time = time.time()
+    try:
+        import httpx
+        headers = {"Content-Type": "application/json"}
+        if a_key.strip():
+            headers["Authorization"] = f"Bearer {a_key.strip()}"
+
+        if model_type == "embedding":
+            endpoint = f"{target_base}/embeddings"
+            payload = {"model": model_name, "input": ["ping"]}
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+            latency_ms = int((time.time() - start_time) * 1000)
+            if resp.status_code != 200:
+                raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+            data = resp.json()
+            vecs = data.get("data", [])
+            dim = len(vecs[0]["embedding"]) if vecs and "embedding" in vecs[0] else 0
+            return {
+                "status": "success",
+                "latency_ms": latency_ms,
+                "dimension": dim,
+                "message": f"嵌入模型连通成功！延迟: {latency_ms}ms, 维度: {dim}"
+            }
+        else:
+            endpoint = f"{target_base}/chat/completions"
+            payload = {
+                "model": model_name,
+                "messages": [{"role": "user", "content": "hi"}],
+                "max_tokens": 5
+            }
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                resp = await client.post(endpoint, json=payload, headers=headers)
+            latency_ms = int((time.time() - start_time) * 1000)
+            if resp.status_code != 200:
+                raise RuntimeError(f"HTTP {resp.status_code}: {resp.text[:200]}")
+            return {
+                "status": "success",
+                "latency_ms": latency_ms,
+                "message": f"对话模型连通成功！延迟: {latency_ms}ms"
+            }
+    except Exception as e:
+        latency_ms = int((time.time() - start_time) * 1000)
+        raise HTTPException(status_code=400, detail=f"连通失败 ({latency_ms}ms): {e}")
+
+
+@router.get("/api/llm/assignments")
+async def get_model_assignments(_: str = Depends(require_auth)):
+    cfg = config_manager.config
+    return cfg.model_assignments.model_dump()
+
+
+@router.post("/api/llm/assignments")
+async def save_model_assignments(req: ModelAssignmentsSaveRequest, _: str = Depends(require_auth)):
+    cfg = config_manager.config
+    updated = False
+    old_embed_id = cfg.model_assignments.embedding.get("model_id")
+
+    if req.replyer is not None:
+        cfg.model_assignments.replyer.update(req.replyer)
+        if "model_id" in req.replyer and req.replyer["model_id"]:
+            cfg.active_model_id = req.replyer["model_id"]
+        updated = True
+
+    if req.planner is not None:
+        cfg.model_assignments.planner.update(req.planner)
+        if "model_id" in req.planner and req.planner["model_id"]:
+            cfg.active_decision_model_id = req.planner["model_id"]
+        updated = True
+
+    if req.utils is not None:
+        cfg.model_assignments.utils.update(req.utils)
+        updated = True
+
+    if req.vlm is not None:
+        cfg.model_assignments.vlm.update(req.vlm)
+        updated = True
+
+    if req.embedding is not None:
+        cfg.model_assignments.embedding.update(req.embedding)
+        new_embed_id = cfg.model_assignments.embedding.get("model_id")
+        if new_embed_id and new_embed_id != old_embed_id:
+            try:
+                from src.memory.vector_store import vector_store
+                vector_store.on_embedding_model_changed()
+            except Exception as e:
+                print(f"[VectorStore] 切换嵌入模型重置通知异常: {e}")
+        updated = True
+
+    if updated:
+        config_manager.save()
+
+    return {
+        "status": "success",
+        "message": "功能模型分配已成功保存生效！",
+        "assignments": cfg.model_assignments.model_dump()
+    }
 
 
 # ---------------- 本地 TTS 测试 ----------------

@@ -124,6 +124,8 @@ class ModelHubItem(BaseModel):
     provider_id: str = Field(..., description="所属供应商ID")
     model_name: str = Field(..., description="上游模型真实ID")
     display_name: str = Field(default="", description="显示名称")
+    model_type: str = Field(default="llm", description="模型类型: llm(文本对话) / vlm(视觉多模态) / embedding(向量嵌入) / audio(语音)")
+    dimension: Optional[int] = Field(default=None, description="向量维度(仅适用于 embedding 模型，如 512, 1024, 1536)")
     temperature: float = Field(default=0.7, description="采样温度")
     max_tokens: int = Field(default=200, description="单次最大输出Token数")
     context_limit: int = Field(default=12, description="上下文轮数限制")
@@ -154,12 +156,46 @@ class SessionConfig(BaseModel):
     cooldown_seconds: int = Field(default=0, description="单次回复后冷却秒数 (0无冷却)")
 
 
+class ModelAssignmentsConfig(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    replyer: Dict[str, Any] = Field(default_factory=lambda: {
+        "model_id": "",
+        "strategy": "fixed",
+        "max_tokens": 1200,
+        "temperature": 0.7
+    }, description="主回复模型分配")
+    planner: Dict[str, Any] = Field(default_factory=lambda: {
+        "model_id": "",
+        "strategy": "fixed",
+        "max_tokens": 400,
+        "temperature": 0.2
+    }, description="计划决策模型分配")
+    utils: Dict[str, Any] = Field(default_factory=lambda: {
+        "model_id": "",
+        "strategy": "fixed",
+        "max_tokens": 600,
+        "temperature": 0.3
+    }, description="辅助工具模型分配")
+    vlm: Dict[str, Any] = Field(default_factory=lambda: {
+        "model_id": "",
+        "strategy": "fixed",
+        "max_tokens": 1000,
+        "temperature": 0.7
+    }, description="视觉分析模型分配")
+    embedding: Dict[str, Any] = Field(default_factory=lambda: {
+        "model_id": "builtin/bge-small-zh-v1.5",
+        "strategy": "fixed",
+        "dimension": 512
+    }, description="向量嵌入模型分配")
+
+
 class AppConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     llm: LLMConfig = Field(default_factory=LLMConfig)
     decision_llm: DecisionLLMConfig = Field(default_factory=DecisionLLMConfig)
     providers: List[ProviderConfig] = Field(default_factory=list, description="多供应商配置列表")
     model_hub: List[ModelHubItem] = Field(default_factory=list, description="系统模型库")
+    model_assignments: ModelAssignmentsConfig = Field(default_factory=ModelAssignmentsConfig, description="五大功能任务模型分配")
     active_model_id: str = Field(default="", description="当前主聊天模型Tag")
     active_decision_model_id: str = Field(default="", description="当前决策模型Tag")
     session_overrides: dict[str, SessionConfig] = Field(default_factory=dict, description="特定会话独立配置覆盖表")
@@ -253,6 +289,49 @@ class ConfigManager:
             cfg.model_hub.append(m_item)
             if not cfg.active_model_id:
                 cfg.active_model_id = default_tag
+
+        # 确保内置离线供应商存在
+        if not any(p.id == "builtin" for p in cfg.providers):
+            cfg.providers.append(ProviderConfig(
+                id="builtin",
+                name="内置离线",
+                base_url="local",
+                api_key="",
+                enabled=True,
+            ))
+
+        # 确保内置向量嵌入模型进入模型库
+        builtin_embed_id = "builtin/bge-small-zh-v1.5"
+        if not any(it.id == builtin_embed_id or it.model_name == "bge-small-zh-v1.5" for it in cfg.model_hub):
+            cfg.model_hub.append(ModelHubItem(
+                id=builtin_embed_id,
+                provider_id="builtin",
+                model_name="bge-small-zh-v1.5",
+                display_name="BGE-Small-ZH (内置离线向量模型)",
+                model_type="embedding",
+                dimension=512,
+                temperature=0.0,
+                max_tokens=0,
+                context_limit=0,
+                supports_vision=False,
+                supports_audio=False,
+                supports_video=False,
+            ))
+
+        # 确保功能分配 model_assignments 健全性
+        if not cfg.model_assignments.replyer.get("model_id"):
+            cfg.model_assignments.replyer["model_id"] = cfg.active_model_id or (cfg.model_hub[0].id if cfg.model_hub else "")
+        if not cfg.model_assignments.planner.get("model_id"):
+            cfg.model_assignments.planner["model_id"] = cfg.active_decision_model_id or cfg.model_assignments.replyer.get("model_id", "")
+        if not cfg.model_assignments.embedding.get("model_id"):
+            cfg.model_assignments.embedding["model_id"] = builtin_embed_id
+            cfg.model_assignments.embedding["dimension"] = 512
+
+        # 同步向后兼容字段
+        if cfg.model_assignments.replyer.get("model_id"):
+            cfg.active_model_id = cfg.model_assignments.replyer["model_id"]
+        if cfg.model_assignments.planner.get("model_id"):
+            cfg.active_decision_model_id = cfg.model_assignments.planner["model_id"]
 
         if not cfg.active_model_id and cfg.model_hub:
             cfg.active_model_id = cfg.model_hub[0].id

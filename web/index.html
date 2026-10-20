@@ -759,69 +759,206 @@
           </div>
         </section>
 
-        <!-- ================= TAB 2: LLM 多供应商与系统模型库 ================= -->
-        <section id="tab-llm" class="tab-pane space-y-6">
-          <div class="glass-card p-6 rounded-2xl border border-slate-800 space-y-6">
-            
-            <!-- 头部：多供应商配置模块 -->
-            <div>
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
-                <div>
-                  <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
+        <!-- ================= TAB 2: LLM 模型配置与功能分配 ================= -->
+        <section id="tab-llm" class="tab-pane space-y-5">
+          <!-- 顶部子 Tab 切换器 (模型设置 vs 功能分配) -->
+          <div class="flex items-center gap-2 border-b border-slate-800 pb-3">
+            <button id="btn-subtab-models" type="button" class="subtab-btn active px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-cyan-950 text-cyan-300 border border-cyan-700 shadow">
+              <i class="fa-solid fa-layer-group"></i>
+              <span>模型设置</span>
+            </button>
+            <button id="btn-subtab-assignments" type="button" class="subtab-btn px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800">
+              <i class="fa-solid fa-sliders"></i>
+              <span>功能分配</span>
+            </button>
+          </div>
+
+          <!-- ================= 子页面 1: 模型设置 (全模型汇总/提供商筛选) ================= -->
+          <div id="subtab-pane-models" class="space-y-4">
+            <div class="flex flex-col lg:flex-row gap-4 items-start">
+              
+              <!-- 左侧提供商侧边栏 -->
+              <div class="w-full lg:w-64 shrink-0 glass-card p-4 rounded-2xl border border-slate-800 space-y-3">
+                <div class="flex items-center justify-between border-b border-slate-800/80 pb-2.5">
+                  <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
                     <i class="fa-solid fa-server text-cyan-400"></i>
-                    <span>多供应商整合管理 (LLM Providers)</span>
-                  </h3>
-                  <p class="text-xs text-slate-400 mt-1">配置多个 OpenAI 兼容接口供应商（如 SiliconFlow、OpenAI、本地 Ollama、DeepSeek 等），支持独立拉取可用模型。</p>
-                </div>
-                <button id="btn-add-provider" class="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5">
-                  <i class="fa-solid fa-plus"></i>
-                  <span>添加供应商</span>
-                </button>
-              </div>
-
-              <!-- 供应商卡片列表 -->
-              <div id="providers-list" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 mt-4">
-                <div class="text-xs text-slate-500 py-4 col-span-full">加载供应商中...</div>
-              </div>
-            </div>
-
-            <!-- 系统模型库 (System Model Hub) -->
-            <div class="border-t border-slate-800 pt-5">
-              <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                <div>
-                  <h3 class="text-base font-bold text-slate-100 flex items-center gap-2">
-                    <i class="fa-solid fa-cube text-purple-400"></i>
-                    <span>系统模型库 (System Model Hub)</span>
-                  </h3>
-                  <p class="text-xs text-slate-400 mt-1">为模型打上专属 Tag（<code class="text-cyan-400">提供商/模型名称</code>），可配置默认温度、上下文轮数、单次Token以及多模态图/音/视传输开关。</p>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button id="btn-add-hub-model" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5">
+                    <span>模型提供商</span>
+                  </span>
+                  <button id="btn-add-provider" type="button" class="btn-primary p-1 text-[11px] rounded-lg flex items-center justify-center w-6 h-6" title="添加模型提供商">
                     <i class="fa-solid fa-plus"></i>
-                    <span>手动添加模型</span>
                   </button>
                 </div>
-              </div>
-
-              <!-- 当前活跃模型指示条 -->
-              <div class="flex flex-wrap items-center gap-4 p-3 rounded-xl bg-slate-900/90 border border-slate-800 mb-4 text-xs">
-                <div class="flex items-center gap-2">
-                  <span class="text-slate-400">当前主聊天模型:</span>
-                  <span id="active-model-tag" class="px-2.5 py-0.5 rounded-full font-bold bg-cyan-950 text-cyan-300 border border-cyan-800/60">--</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <span class="text-slate-400">当前决策研判模型:</span>
-                  <span id="active-decision-tag" class="px-2.5 py-0.5 rounded-full font-bold bg-purple-950 text-purple-300 border border-purple-800/60">--</span>
+                <!-- 厂商列表 -->
+                <div id="providers-filter-list" class="space-y-1 max-h-[500px] overflow-y-auto pr-1">
+                  <!-- 动态渲染厂商过滤按钮 -->
                 </div>
               </div>
 
-              <!-- 模型库卡片/表格 -->
-              <div id="model-hub-list" class="space-y-3">
-                <div class="text-xs text-slate-500 py-4">加载模型库中...</div>
+              <!-- 右侧全模型汇总表格 -->
+              <div class="flex-1 min-w-0 glass-card p-5 rounded-2xl border border-slate-800 space-y-4">
+                
+                <!-- 顶部工具栏：搜索、分类筛选与添加模型按钮 -->
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-3">
+                  <div class="flex items-center gap-2 flex-1 max-w-md">
+                    <div class="relative flex-1">
+                      <span class="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-500"><i class="fa-solid fa-magnifying-glass text-xs"></i></span>
+                      <input type="text" id="filter-hub-search" placeholder="搜索模型名称/标识符..." class="input-field text-xs pl-8 py-1.5">
+                    </div>
+                    <select id="filter-hub-type-select" class="input-field text-xs py-1.5 w-28 shrink-0">
+                      <option value="all">全部类型</option>
+                      <option value="llm">对话(LLM)</option>
+                      <option value="vlm">视觉(VLM)</option>
+                      <option value="embedding">嵌入(Embedding)</option>
+                    </select>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button id="btn-add-hub-model" type="button" class="btn-primary px-3 py-1.5 text-xs flex items-center gap-1.5 whitespace-nowrap">
+                      <i class="fa-solid fa-plus"></i>
+                      <span>添加模型</span>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- 全模型表格 -->
+                <div class="overflow-x-auto rounded-xl border border-slate-800/90 bg-slate-950/40">
+                  <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr class="bg-slate-900/90 text-slate-400 border-b border-slate-800 text-[11px] font-semibold">
+                        <th class="py-2.5 px-3 text-center w-16">使用中</th>
+                        <th class="py-2.5 px-3 min-w-[140px]">模型名称</th>
+                        <th class="py-2.5 px-3 min-w-[180px]">模型标识符</th>
+                        <th class="py-2.5 px-3 w-24">提供商</th>
+                        <th class="py-2.5 px-3 w-28">标签</th>
+                        <th class="py-2.5 px-3 w-16 text-center">温度</th>
+                        <th class="py-2.5 px-3 w-20 text-right">输入价格</th>
+                        <th class="py-2.5 px-3 w-20 text-right">输出价格</th>
+                        <th class="py-2.5 px-3 w-28 text-center">操作</th>
+                      </tr>
+                    </thead>
+                    <tbody id="models-table-body" class="divide-y divide-slate-800/60 font-sans">
+                      <tr>
+                        <td colspan="9" class="text-center py-8 text-xs text-slate-500">加载模型列表中...</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <!-- 底部统计指示条 -->
+                <div class="flex items-center justify-between text-[11px] text-slate-400 pt-1">
+                  <span id="models-table-count">共 0 个模型</span>
+                  <span>⚡ 点击闪电图标可直接测试连通性或探测向量维度</span>
+                </div>
+
               </div>
+
             </div>
-
           </div>
+
+          <!-- ================= 子页面 2: 功能分配 (任务角色绑定) ================= -->
+          <div id="subtab-pane-assignments" class="hidden space-y-4">
+            <div class="flex flex-col lg:flex-row gap-4 items-start">
+              
+              <!-- 左侧任务角色列表 -->
+              <div class="w-full lg:w-60 shrink-0 glass-card p-4 rounded-2xl border border-slate-800 space-y-2">
+                <div class="text-xs font-bold text-slate-200 border-b border-slate-800 pb-2 mb-2 flex items-center gap-1.5">
+                  <i class="fa-solid fa-diagram-project text-cyan-400"></i>
+                  <span>功能任务分类</span>
+                </div>
+                <div id="assignment-role-list" class="space-y-1.5">
+                  <!-- 动态任务角色导航项 -->
+                </div>
+              </div>
+
+              <!-- 右侧选中任务的详细配置面板 -->
+              <div class="flex-1 min-w-0 glass-card p-6 rounded-2xl border border-slate-800 space-y-5">
+                
+                <!-- 任务头部信息 -->
+                <div class="border-b border-slate-800/80 pb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <h3 id="role-detail-title" class="text-base font-bold text-slate-100 flex items-center gap-2">
+                      <i class="fa-solid fa-comment-dots text-cyan-400"></i>
+                      <span>replyer 回复</span>
+                    </h3>
+                    <p id="role-detail-desc" class="text-xs text-slate-400 mt-1">负责生成最终与用户或群聊沟通的回复内容。</p>
+                  </div>
+                  <span id="role-detail-badge" class="px-2.5 py-1 rounded-full text-[11px] font-bold bg-cyan-950 text-cyan-300 border border-cyan-800/60 self-start">主要角色</span>
+                </div>
+
+                <!-- 模型配置表单 -->
+                <div class="space-y-4">
+                  <div>
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">绑定执行模型</label>
+                    <select id="role-model-select" class="input-field text-xs w-full py-2">
+                      <!-- 动态选项 -->
+                    </select>
+                    <p id="role-model-hint" class="text-[11px] text-slate-500 mt-1">从系统模型库中挑选最适合本任务特性的模型</p>
+                  </div>
+
+                  <!-- 非 Embedding 模型的参数项 -->
+                  <div id="role-llm-params-block" class="space-y-4">
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">选择策略</label>
+                        <select id="role-strategy-select" class="input-field text-xs">
+                          <option value="fixed">固定模型 (Fixed)</option>
+                          <option value="random">随机轮询 (Random)</option>
+                          <option value="fallback">故障备用 (Fallback)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">单次最大 Token</label>
+                        <input type="number" id="role-max-tokens-input" class="input-field text-xs" value="1200" min="50" max="8000">
+                      </div>
+                      <div>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">采样温度 (<span id="role-temp-val">0.7</span>)</label>
+                        <input type="range" id="role-temp-input" min="0" max="1.5" step="0.05" value="0.7" class="w-full accent-cyan-400 mt-2">
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Embedding 专属参数项 -->
+                  <div id="role-embedding-params-block" class="hidden p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 space-y-3">
+                    <div class="flex items-center justify-between">
+                      <span class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                        <i class="fa-solid fa-bezier-curve text-cyan-400"></i>
+                        <span>向量嵌入维度与自动探测</span>
+                      </span>
+                      <button id="btn-detect-embed-dim" type="button" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 text-cyan-300 border-cyan-800 hover:bg-cyan-950/60">
+                        <i class="fa-solid fa-bolt text-amber-400"></i>
+                        <span>探测当前模型维度</span>
+                      </button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      <div>
+                        <label class="block text-[11px] text-slate-400 mb-1">当前向量维度 (Dimension)</label>
+                        <input type="number" id="role-embed-dim-input" class="input-field text-xs" value="512">
+                      </div>
+                      <div>
+                        <label class="block text-[11px] text-slate-400 mb-1">模型状态说明</label>
+                        <div id="role-embed-status-desc" class="text-[11px] text-emerald-400 py-1.5">内置离线模型 (bge-small-zh-v1.5, 512维) 零网络依赖</div>
+                      </div>
+                    </div>
+
+                    <p class="text-[11px] text-slate-500">注：若切换为自定义第三方嵌入模型，点击「保存功能分配」后系统将自动重置底层 ChromaDB 集合维度并自动重新灌注原作核心记忆！</p>
+                  </div>
+
+                </div>
+
+                <!-- 底部保存按钮 -->
+                <div class="flex items-center justify-between pt-4 border-t border-slate-800">
+                  <span id="assignment-save-status" class="text-xs text-slate-400"></span>
+                  <button id="btn-save-role-assignment" type="button" class="btn-primary px-5 py-2 text-xs flex items-center gap-2">
+                    <i class="fa-solid fa-check"></i>
+                    <span>保存功能分配</span>
+                  </button>
+                </div>
+
+              </div>
+
+            </div>
+          </div>
+
         </section>
 
         <!-- ================= TAB 3: 本地TTS与同传 ================= -->
@@ -2206,9 +2343,32 @@
             <p class="text-[11px] text-slate-500 mt-0.5">指令切换与会话绑定将使用此 Tag 标识模型</p>
           </div>
 
-          <div>
-            <label class="block text-xs font-semibold text-slate-300 mb-1">友好显示名称 (可选)</label>
-            <input type="text" id="hub-display-name-input" class="input-field text-xs" placeholder="DeepSeek V3 (极速版)">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">友好显示名称 (可选)</label>
+              <input type="text" id="hub-display-name-input" class="input-field text-xs" placeholder="DeepSeek V3 (极速版)">
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">模型功能类型</label>
+              <select id="hub-model-type-select" class="input-field text-xs">
+                <option value="llm">普通对话 (LLM)</option>
+                <option value="vlm">视觉理解 (VLM)</option>
+                <option value="embedding">向量嵌入 (Embedding)</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- 嵌入模型专属维度配置块 -->
+          <div id="hub-dimension-container" class="hidden p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+            <div class="flex items-center justify-between">
+              <label class="block text-xs font-semibold text-slate-300">向量输出维度 (Dimension)</label>
+              <button type="button" id="btn-modal-detect-dim" class="btn-secondary px-2.5 py-1 text-xs text-cyan-300 flex items-center gap-1.5">
+                <i class="fa-solid fa-bolt text-amber-400"></i>
+                <span>自动探测维度</span>
+              </button>
+            </div>
+            <input type="number" id="hub-dimension-input" class="input-field text-xs" placeholder="例如 512, 1024, 1536">
+            <p class="text-[11px] text-slate-500">点击「自动探测维度」将向所选供应商发送探测探针自动获取准确输出维度。</p>
           </div>
 
           <div class="grid grid-cols-3 gap-2">

@@ -261,8 +261,17 @@ class LLMClient:
 
                 latency_ms = int((time.time() - start_time) * 1000)
                 if resp.status_code != 200:
-                    err_msg = f"HTTP {resp.status_code}: {resp.text[:300]}"
-                    raise RuntimeError(f"LLM Error: {err_msg}")
+                    # 容错：如果是因为 response_format 导致 400 报错（许多模型/网关如 Doubao/Nemotron/Ollama 不支持该参数），自动剥离并立即无缝重试
+                    if is_decision and "response_format" in payload and resp.status_code == 400:
+                        payload.pop("response_format", None)
+                        async with httpx.AsyncClient(timeout=self.timeout) as client:
+                            resp = await client.post(endpoint, json=payload, headers=headers)
+                        if resp.status_code != 200:
+                            err_msg = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                            raise RuntimeError(f"LLM Error: {err_msg}")
+                    else:
+                        err_msg = f"HTTP {resp.status_code}: {resp.text[:300]}"
+                        raise RuntimeError(f"LLM Error: {err_msg}")
 
                 raw_text = resp.text.strip()
                 if not raw_text:

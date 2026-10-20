@@ -2434,71 +2434,129 @@ function initRealTimePerception() {
   setInterval(syncServerTime, 25000);
 }
 
-// ---------------- 多供应商与系统模型库 ----------------
+// ---------------- 多供应商与系统模型库 & 功能分配 ----------------
 let currentProviders = [];
 let currentHubItems = [];
+let currentAssignments = {};
 let fetchedModelsList = [];
 let activeFetchingProvider = null;
+let currentProviderFilter = "all";
+let currentAssignmentRole = "replyer";
+
+const TASK_ROLES = {
+  replyer: {
+    key: "replyer",
+    name: "replyer 回复",
+    desc: "负责生成最终与用户或群聊沟通的回复内容，具备完整角色神态与情感共鸣。",
+    badge: "主要角色",
+    icon: "fa-comment-dots",
+    typeFilter: ["llm", "vlm"],
+  },
+  planner: {
+    key: "planner",
+    name: "planner 规划/决策",
+    desc: "负责群聊上下文研判、智能评估是否主动插话发言与聊天节奏把控。",
+    badge: "决策中枢",
+    icon: "fa-brain",
+    typeFilter: ["llm"],
+  },
+  utils: {
+    key: "utils",
+    name: "utils 工具",
+    desc: "负责技能调用、函数计算与辅助逻辑处理，优先调用结构化能力强的模型。",
+    badge: "辅助工具",
+    icon: "fa-toolbox",
+    typeFilter: ["llm"],
+  },
+  vlm: {
+    key: "vlm",
+    name: "vlm 视觉",
+    desc: "负责群聊图片识别与视觉多模态理解，提供图片场景与角色细节分析。",
+    badge: "多模态",
+    icon: "fa-eye",
+    typeFilter: ["vlm", "llm"],
+  },
+  embedding: {
+    key: "embedding",
+    name: "embedding 嵌入式",
+    desc: "负责长期记忆库的语义向量化与快速检索召回，保障角色深层设定的精准匹配。",
+    badge: "记忆核心",
+    icon: "fa-bezier-curve",
+    typeFilter: ["embedding"],
+  },
+};
 
 async function loadProviders() {
   try {
     const res = await fetch("/api/llm/providers");
     if (!res.ok) return;
     currentProviders = await res.json();
-
-    const listDiv = document.getElementById("providers-list");
-    if (!listDiv) return;
-
-    if (currentProviders.length === 0) {
-      listDiv.innerHTML = `
-        <div class="col-span-full p-6 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
-          尚未配置任何供应商，点击上方「添加供应商」按钮接入 OpenAI、SiliconFlow、Ollama 等接口。
-        </div>
-      `;
-      return;
-    }
-
-    listDiv.innerHTML = currentProviders
-      .map(
-        (p) => `
-      <div class="bg-slate-900/80 border border-slate-800 hover:border-slate-700 p-4 rounded-xl space-y-3 transition flex flex-col justify-between">
-        <div class="space-y-1.5">
-          <div class="flex items-center justify-between">
-            <span class="font-bold text-sm text-slate-100 flex items-center gap-1.5">
-              <i class="fa-solid fa-cloud text-cyan-400"></i>
-              <span>${escapeHtml(p.name)}</span>
-            </span>
-            <span class="px-2 py-0.5 rounded text-[10px] font-semibold ${
-              p.enabled
-                ? "bg-emerald-950 text-emerald-300 border border-emerald-800/60"
-                : "bg-slate-800 text-slate-400 border border-slate-700"
-            }">${p.enabled ? "已启用" : "已停用"}</span>
-          </div>
-          <div class="text-[11px] text-slate-400 font-mono break-all truncate" title="${escapeHtml(p.base_url)}">
-            ${escapeHtml(p.base_url)}
-          </div>
-        </div>
-
-        <div class="flex items-center gap-1.5 pt-2 border-t border-slate-800/70">
-          <button onclick="fetchModelsFromProvider('${p.id}')" class="btn-secondary px-2.5 py-1 text-xs flex-1 flex items-center justify-center gap-1">
-            <i class="fa-solid fa-arrows-rotate text-cyan-400"></i>
-            <span>拉取模型</span>
-          </button>
-          <button onclick="editProvider('${p.id}')" class="btn-secondary px-2 py-1 text-xs text-slate-300" title="编辑供应商">
-            <i class="fa-solid fa-pen-to-square"></i>
-          </button>
-          <button onclick="deleteProvider('${p.id}')" class="btn-secondary px-2 py-1 text-xs text-rose-400 hover:text-rose-300" title="删除供应商">
-            <i class="fa-solid fa-trash"></i>
-          </button>
-        </div>
-      </div>
-    `
-      )
-      .join("");
+    renderProvidersFilterList();
   } catch (e) {
     console.error("加载供应商失败:", e);
   }
 }
+
+function renderProvidersFilterList() {
+  const container = document.getElementById("providers-filter-list");
+  if (!container) return;
+
+  const totalModels = currentHubItems.length;
+  let html = `
+    <button onclick="setProviderFilter('all')" class="w-full text-left px-3 py-2 rounded-xl text-xs font-semibold flex items-center justify-between transition ${
+      currentProviderFilter === "all"
+        ? "bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 shadow"
+        : "text-slate-300 hover:bg-slate-900/70 border border-transparent"
+    }">
+      <span class="flex items-center gap-2">
+        <i class="fa-solid fa-layer-group text-slate-400"></i>
+        <span>全部厂商</span>
+      </span>
+      <span class="px-2 py-0.5 rounded-full text-[10px] bg-slate-900 text-slate-400 border border-slate-800">${totalModels}</span>
+    </button>
+  `;
+
+  currentProviders.forEach((p) => {
+    const isSelected = currentProviderFilter === p.id;
+    const count = currentHubItems.filter((m) => m.provider_id === p.id).length;
+    const isBuiltin = p.id === "builtin";
+
+    html += `
+      <div class="group flex items-center justify-between px-3 py-2 rounded-xl text-xs transition ${
+        isSelected
+          ? "bg-cyan-950/80 text-cyan-300 border border-cyan-800/80 shadow"
+          : "text-slate-300 hover:bg-slate-900/70 border border-transparent"
+      }">
+        <button onclick="setProviderFilter('${escapeHtml(p.id)}')" class="flex-1 text-left flex items-center gap-2 truncate">
+          <span class="w-2 h-2 rounded-full ${p.enabled ? "bg-emerald-400" : "bg-slate-500"} shrink-0"></span>
+          <span class="truncate font-medium">${escapeHtml(p.name)}</span>
+          <span class="px-1.5 py-0.2 rounded-full text-[10px] bg-slate-900 text-slate-400 border border-slate-800 shrink-0">${count}</span>
+        </button>
+        <div class="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition shrink-0 ml-1">
+          ${
+            !isBuiltin
+              ? `
+            <button onclick="fetchModelsFromProvider('${escapeHtml(p.id)}')" class="p-1 text-slate-400 hover:text-cyan-300" title="拉取模型"><i class="fa-solid fa-arrows-rotate text-[11px]"></i></button>
+            <button onclick="editProvider('${escapeHtml(p.id)}')" class="p-1 text-slate-400 hover:text-slate-200" title="编辑供应商"><i class="fa-solid fa-gear text-[11px]"></i></button>
+            <button onclick="deleteProvider('${escapeHtml(p.id)}')" class="p-1 text-slate-400 hover:text-rose-400" title="删除"><i class="fa-solid fa-trash text-[11px]"></i></button>
+          `
+              : `
+            <span class="text-[10px] text-slate-500 px-1">内置</span>
+          `
+          }
+        </div>
+      </div>
+    `;
+  });
+
+  container.innerHTML = html;
+}
+
+window.setProviderFilter = function (provId) {
+  currentProviderFilter = provId;
+  renderProvidersFilterList();
+  renderModelsTable();
+};
 
 async function loadModelHub() {
   try {
@@ -2506,99 +2564,323 @@ async function loadModelHub() {
     if (!res.ok) return;
     const data = await res.json();
     currentHubItems = data.items || [];
-    const activeChat = data.active_model_id || "--";
-    const activeDec = data.active_decision_model_id || "--";
+    currentAssignments = data.model_assignments || {};
 
-    const tagEl = document.getElementById("active-model-tag");
-    const decEl = document.getElementById("active-decision-tag");
-    if (tagEl) tagEl.textContent = activeChat;
-    if (decEl) decEl.textContent = activeDec;
+    const activeChat = currentAssignments?.replyer?.model_id || data.active_model_id || "--";
+    const activeDec = currentAssignments?.planner?.model_id || data.active_decision_model_id || "--";
 
-    const listDiv = document.getElementById("model-hub-list");
-    if (!listDiv) return;
-
-    if (currentHubItems.length === 0) {
-      listDiv.innerHTML = `
-        <div class="p-8 text-center text-xs text-slate-500 bg-slate-900/40 rounded-xl border border-dashed border-slate-800">
-          系统模型库暂无模型。请从上方供应商卡片点击「拉取模型」或点击「手动添加模型」加入模型！
-        </div>
-      `;
-    } else {
-      listDiv.innerHTML = currentHubItems
-        .map((item) => {
-          const isActiveChat = item.id === activeChat;
-          const isActiveDec = item.id === activeDec;
-
-          const multiBadges = [];
-          if (item.supports_vision)
-            multiBadges.push('<span class="px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800 text-[10px]">📷 图传</span>');
-          if (item.supports_audio)
-            multiBadges.push('<span class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px]">🎙️ 音频</span>');
-          if (item.supports_video)
-            multiBadges.push('<span class="px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800 text-[10px]">🎬 视频</span>');
-          if (multiBadges.length === 0) {
-            multiBadges.push('<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">📝 纯文本</span>');
-          }
-
-          const activeBadges = [];
-          if (isActiveChat)
-            activeBadges.push('<span class="px-2 py-0.5 rounded-full font-bold bg-cyan-950 text-cyan-300 border border-cyan-700 text-[10px]">🌟 当前主模型</span>');
-          if (isActiveDec)
-            activeBadges.push('<span class="px-2 py-0.5 rounded-full font-bold bg-purple-950 text-purple-300 border border-purple-700 text-[10px]">🧠 决策模型</span>');
-
-          return `
-          <div class="bg-slate-900/80 border ${
-            isActiveChat ? "border-cyan-500/50 shadow-lg shadow-cyan-950/30" : "border-slate-800"
-          } p-4 rounded-xl space-y-3 transition">
-            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div class="space-y-1">
-                <div class="flex items-center gap-2 flex-wrap">
-                  <span class="font-bold text-sm text-slate-100">${escapeHtml(item.display_name || item.model_name)}</span>
-                  <span class="px-2 py-0.5 rounded font-mono text-xs bg-slate-950 text-cyan-300 border border-slate-800">tag: ${escapeHtml(item.id)}</span>
-                  ${activeBadges.join(" ")}
-                </div>
-                <div class="text-[11px] text-slate-400 flex items-center gap-3">
-                  <span>供应商: <span class="text-slate-300 font-semibold">${escapeHtml(item.provider_id)}</span></span>
-                  <span>真实模型ID: <span class="font-mono text-slate-300">${escapeHtml(item.model_name)}</span></span>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <button onclick="setActiveHubModel('${escapeHtml(item.id)}', 'chat')" class="btn-secondary px-2.5 py-1 text-xs ${
-            isActiveChat ? "opacity-50 pointer-events-none" : ""
-          }">设为主模型</button>
-                <button onclick="setActiveHubModel('${escapeHtml(item.id)}', 'decision')" class="btn-secondary px-2.5 py-1 text-xs ${
-            isActiveDec ? "opacity-50 pointer-events-none" : ""
-          }">设为决策</button>
-                <button onclick="editHubItem('${escapeHtml(item.id)}')" class="btn-secondary px-2 py-1 text-xs" title="编辑参数"><i class="fa-solid fa-pen-to-square"></i></button>
-                <button onclick="deleteHubItem('${escapeHtml(item.id)}')" class="btn-secondary px-2 py-1 text-xs text-rose-400 hover:text-rose-300" title="删除"><i class="fa-solid fa-trash"></i></button>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between gap-4 pt-2 border-t border-slate-800/80 text-xs">
-              <div class="flex items-center gap-2 flex-wrap">
-                <span class="text-slate-400">模态支持:</span>
-                ${multiBadges.join(" ")}
-              </div>
-              <div class="flex items-center gap-3 text-slate-400 text-[11px] font-mono flex-wrap">
-                <span>入: <span class="text-amber-300">¥${item.prompt_price_per_1m !== undefined ? item.prompt_price_per_1m : (item.prompt_price_per_1k ? item.prompt_price_per_1k * 1000 : 0)}</span>/1M</span>
-                <span>出: <span class="text-amber-300">¥${item.completion_price_per_1m !== undefined ? item.completion_price_per_1m : (item.completion_price_per_1k ? item.completion_price_per_1k * 1000 : 0)}</span>/1M</span>
-                <span>温度: <span class="text-slate-200">${item.temperature}</span></span>
-                <span>Max: <span class="text-slate-200">${item.max_tokens}</span></span>
-                <span>轮数: <span class="text-slate-200">${item.context_limit}</span></span>
-              </div>
-            </div>
-          </div>
-        `;
-        })
-        .join("");
+    const tagEl = document.getElementById("header-llm-model");
+    if (tagEl) {
+      tagEl.innerHTML = `<i class="fa-solid fa-microchip mr-1"></i>${escapeHtml(activeChat)}`;
     }
 
+    renderProvidersFilterList();
+    renderModelsTable();
+    renderAssignmentsView();
     updateFlowModelSelects();
   } catch (e) {
     console.error("加载模型库失败:", e);
   }
 }
+
+function renderModelsTable() {
+  const tbody = document.getElementById("models-table-body");
+  const countEl = document.getElementById("models-table-count");
+  if (!tbody) return;
+
+  const searchInput = document.getElementById("filter-hub-search");
+  const typeSelect = document.getElementById("filter-hub-type-select");
+  const searchTerm = (searchInput?.value || "").toLowerCase().trim();
+  const selectedType = typeSelect?.value || "all";
+
+  let filtered = currentHubItems.filter((item) => {
+    if (currentProviderFilter !== "all" && item.provider_id !== currentProviderFilter) {
+      return false;
+    }
+    if (selectedType !== "all") {
+      const itType = item.model_type || "llm";
+      if (selectedType === "embedding" && itType !== "embedding") return false;
+      if (selectedType === "vlm" && itType !== "vlm" && !item.supports_vision) return false;
+      if (selectedType === "llm" && itType === "embedding") return false;
+    }
+    if (searchTerm) {
+      const matchId = (item.id || "").toLowerCase().includes(searchTerm);
+      const matchName = (item.model_name || "").toLowerCase().includes(searchTerm);
+      const matchDisp = (item.display_name || "").toLowerCase().includes(searchTerm);
+      const matchProv = (item.provider_id || "").toLowerCase().includes(searchTerm);
+      if (!matchId && !matchName && !matchDisp && !matchProv) return false;
+    }
+    return true;
+  });
+
+  if (countEl) countEl.textContent = `共 ${filtered.length} 个模型 (总计 ${currentHubItems.length})`;
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `
+      <tr>
+        <td colspan="9" class="text-center py-10 text-xs text-slate-500">
+          <div class="flex flex-col items-center gap-2">
+            <i class="fa-solid fa-box-open text-2xl text-slate-600"></i>
+            <span>没有找到匹配的模型条目</span>
+          </div>
+        </td>
+      </tr>
+    `;
+    return;
+  }
+
+  const assignedModelIds = new Set();
+  if (currentAssignments) {
+    Object.values(currentAssignments).forEach((val) => {
+      if (val && typeof val === "object" && val.model_id) {
+        assignedModelIds.add(val.model_id);
+      }
+    });
+  }
+  const activeChat = currentAssignments?.replyer?.model_id || "";
+  const activeDec = currentAssignments?.planner?.model_id || "";
+
+  tbody.innerHTML = filtered
+    .map((item) => {
+      const isAssigned = assignedModelIds.has(item.id);
+      const isReplyer = item.id === activeChat;
+      const isPlanner = item.id === activeDec;
+
+      const tags = [];
+      const mType = item.model_type || "llm";
+      if (mType === "embedding") {
+        tags.push(`<span class="px-1.5 py-0.5 rounded bg-emerald-950 text-emerald-300 border border-emerald-800 text-[10px]">📐 嵌入(${item.dimension || 512}维)</span>`);
+      } else {
+        if (item.supports_vision || mType === "vlm") {
+          tags.push('<span class="px-1.5 py-0.5 rounded bg-sky-950 text-sky-300 border border-sky-800 text-[10px]">📷 视觉</span>');
+        }
+        if (item.supports_audio) {
+          tags.push('<span class="px-1.5 py-0.5 rounded bg-indigo-950 text-indigo-300 border border-indigo-800 text-[10px]">🎙️ 音频</span>');
+        }
+        if (item.supports_video) {
+          tags.push('<span class="px-1.5 py-0.5 rounded bg-purple-950 text-purple-300 border border-purple-800 text-[10px]">🎬 视频</span>');
+        }
+        if (tags.length === 0) {
+          tags.push('<span class="px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 text-[10px]">📝 文本</span>');
+        }
+      }
+
+      const pObj = currentProviders.find((x) => x.id === item.provider_id);
+      const providerLabel = pObj?.name || item.provider_id;
+      const isBuiltin = item.provider_id === "builtin" || item.id.startsWith("builtin");
+
+      return `
+        <tr class="hover:bg-slate-900/40 transition">
+          <td class="py-2.5 px-3 text-center">
+            ${
+              isAssigned
+                ? '<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-cyan-950 text-cyan-400 border border-cyan-800 shadow" title="正在某个功能任务中使用"><i class="fa-solid fa-check text-[10px]"></i></span>'
+                : '<span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-slate-900 text-slate-600 border border-slate-800 text-[10px]">-</span>'
+            }
+          </td>
+          <td class="py-2.5 px-3 font-semibold text-slate-200">
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <span>${escapeHtml(item.display_name || item.model_name)}</span>
+              ${isReplyer ? '<span class="px-1.5 py-0.2 rounded text-[10px] bg-cyan-950 text-cyan-300 border border-cyan-700">主回复</span>' : ''}
+              ${isPlanner ? '<span class="px-1.5 py-0.2 rounded text-[10px] bg-purple-950 text-purple-300 border border-purple-700">决策</span>' : ''}
+            </div>
+          </td>
+          <td class="py-2.5 px-3 font-mono text-slate-300">
+            <div class="flex items-center gap-1">
+              <span class="truncate max-w-[200px]" title="${escapeHtml(item.id)}">${escapeHtml(item.id)}</span>
+              <button onclick="navigator.clipboard.writeText('${escapeHtml(item.id)}'); showToast('标识符已复制');" class="text-slate-500 hover:text-cyan-400" title="复制标识符"><i class="fa-regular fa-copy text-[11px]"></i></button>
+            </div>
+          </td>
+          <td class="py-2.5 px-3">
+            <span class="px-2 py-0.5 rounded text-[10px] font-medium bg-slate-900 text-slate-300 border border-slate-800 whitespace-nowrap">
+              ${escapeHtml(providerLabel)}
+            </span>
+          </td>
+          <td class="py-2.5 px-3">
+            <div class="flex flex-wrap gap-1">${tags.join("")}</div>
+          </td>
+          <td class="py-2.5 px-3 text-center font-mono text-slate-300">
+            ${mType === "embedding" ? "-" : item.temperature}
+          </td>
+          <td class="py-2.5 px-3 text-right font-mono text-slate-300">
+            ¥${item.prompt_price_per_1m !== undefined ? item.prompt_price_per_1m : (item.prompt_price_per_1k ? item.prompt_price_per_1k * 1000 : 0)}
+          </td>
+          <td class="py-2.5 px-3 text-right font-mono text-slate-300">
+            ¥${item.completion_price_per_1m !== undefined ? item.completion_price_per_1m : (item.completion_price_per_1k ? item.completion_price_per_1k * 1000 : 0)}
+          </td>
+          <td class="py-2.5 px-3 text-center">
+            <div class="flex items-center justify-center gap-1">
+              <button onclick="testModelConnection('${escapeHtml(item.id)}')" class="p-1.5 rounded-lg text-slate-400 hover:text-amber-400 hover:bg-slate-800 transition" title="测试连通性 / 探测维度">
+                <i class="fa-solid fa-bolt text-xs"></i>
+              </button>
+              ${
+                !isBuiltin
+                  ? `
+                <button onclick="editHubItem('${escapeHtml(item.id)}')" class="p-1.5 rounded-lg text-slate-400 hover:text-cyan-300 hover:bg-slate-800 transition" title="编辑模型">
+                  <i class="fa-solid fa-pen-to-square text-xs"></i>
+                </button>
+                <button onclick="deleteHubItem('${escapeHtml(item.id)}')" class="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-slate-800 transition" title="删除模型">
+                  <i class="fa-solid fa-trash text-xs"></i>
+                </button>
+              `
+                  : `
+                <span class="text-[10px] text-slate-600 px-1">内置</span>
+              `
+              }
+            </div>
+          </td>
+        </tr>
+      `;
+    })
+    .join("");
+}
+
+window.selectAssignmentRole = function (roleKey) {
+  currentAssignmentRole = roleKey;
+  renderAssignmentsView();
+};
+
+function renderAssignmentsView() {
+  const roleList = document.getElementById("assignment-role-list");
+  if (!roleList) return;
+
+  let html = "";
+  Object.values(TASK_ROLES).forEach((role) => {
+    const isSelected = currentAssignmentRole === role.key;
+    const currentModelId = currentAssignments?.[role.key]?.model_id || "未指定";
+    const item = currentHubItems.find((x) => x.id === currentModelId);
+    const dispName = item?.display_name || item?.model_name || currentModelId;
+
+    html += `
+      <button onclick="selectAssignmentRole('${role.key}')" class="w-full text-left p-2.5 rounded-xl text-xs transition border flex flex-col gap-1 ${
+        isSelected
+          ? "bg-cyan-950/80 text-cyan-300 border-cyan-800/80 shadow"
+          : "bg-slate-900/40 text-slate-300 border-slate-800/60 hover:border-slate-700"
+      }">
+        <div class="flex items-center justify-between">
+          <span class="font-bold flex items-center gap-1.5">
+            <i class="fa-solid ${role.icon} ${isSelected ? "text-cyan-400" : "text-slate-400"}"></i>
+            <span>${role.name}</span>
+          </span>
+          <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-800">${role.badge}</span>
+        </div>
+        <div class="text-[11px] font-mono text-slate-400 truncate pl-4">
+          ${escapeHtml(dispName)}
+        </div>
+      </button>
+    `;
+  });
+  roleList.innerHTML = html;
+
+  const currentRoleInfo = TASK_ROLES[currentAssignmentRole] || TASK_ROLES.replyer;
+  const currentCfg = currentAssignments?.[currentAssignmentRole] || {};
+
+  const titleEl = document.getElementById("role-detail-title");
+  const descEl = document.getElementById("role-detail-desc");
+  const badgeEl = document.getElementById("role-detail-badge");
+  if (titleEl) {
+    titleEl.innerHTML = `<i class="fa-solid ${currentRoleInfo.icon} text-cyan-400"></i><span>${currentRoleInfo.name}</span>`;
+  }
+  if (descEl) descEl.textContent = currentRoleInfo.desc;
+  if (badgeEl) badgeEl.textContent = currentRoleInfo.badge;
+
+  const sel = document.getElementById("role-model-select");
+  if (sel) {
+    let candidateModels = currentHubItems;
+    if (currentAssignmentRole === "embedding") {
+      candidateModels = currentHubItems.filter((m) => (m.model_type || "llm") === "embedding");
+    } else if (currentAssignmentRole === "vlm") {
+      candidateModels = currentHubItems.filter((m) => m.supports_vision || m.model_type === "vlm");
+    } else {
+      candidateModels = currentHubItems.filter((m) => (m.model_type || "llm") !== "embedding");
+    }
+
+    if (candidateModels.length === 0) {
+      candidateModels = currentHubItems;
+    }
+
+    sel.innerHTML = candidateModels
+      .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.display_name || m.model_name)} (${escapeHtml(m.id)})</option>`)
+      .join("");
+
+    sel.value = currentCfg.model_id || candidateModels[0]?.id || "";
+  }
+
+  const isEmbed = currentAssignmentRole === "embedding";
+  const llmBlock = document.getElementById("role-llm-params-block");
+  const embedBlock = document.getElementById("role-embedding-params-block");
+
+  if (isEmbed) {
+    if (llmBlock) llmBlock.classList.add("hidden");
+    if (embedBlock) embedBlock.classList.remove("hidden");
+
+    const dimInput = document.getElementById("role-embed-dim-input");
+    const statusDesc = document.getElementById("role-embed-status-desc");
+    if (dimInput) dimInput.value = currentCfg.dimension || 512;
+    if (statusDesc) {
+      const isBuiltin = (currentCfg.model_id || "").includes("builtin") || (currentCfg.model_id || "").includes("bge-small-zh-v1.5");
+      statusDesc.textContent = isBuiltin
+        ? "内置离线模型 (bge-small-zh-v1.5, 512维) 零网络依赖、极速稳定"
+        : `自定义远程模型 (${escapeHtml(currentCfg.model_id || "未指定")})，已启用动态维度支持`;
+      statusDesc.className = isBuiltin ? "text-[11px] text-emerald-400 py-1.5" : "text-[11px] text-cyan-300 py-1.5";
+    }
+  } else {
+    if (llmBlock) llmBlock.classList.remove("hidden");
+    if (embedBlock) embedBlock.classList.add("hidden");
+
+    const stratSel = document.getElementById("role-strategy-select");
+    const maxTokInp = document.getElementById("role-max-tokens-input");
+    const tempInp = document.getElementById("role-temp-input");
+    const tempVal = document.getElementById("role-temp-val");
+
+    if (stratSel) stratSel.value = currentCfg.strategy || "fixed";
+    if (maxTokInp) maxTokInp.value = currentCfg.max_tokens !== undefined ? currentCfg.max_tokens : 1200;
+    if (tempInp) {
+      tempInp.value = currentCfg.temperature !== undefined ? currentCfg.temperature : 0.7;
+      if (tempVal) tempVal.textContent = tempInp.value;
+    }
+  }
+}
+
+window.testModelConnection = async function (tag) {
+  try {
+    showToast(`正在测试模型「${tag}」连通性...`);
+    const res = await fetch("/api/llm/test_connection", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tag }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "测试失败");
+    await showAlertDialog(data.message, "连通性测试结果");
+  } catch (err) {
+    await showAlertDialog(`连通失败: ${err.message}`, "连通性测试异常");
+  }
+};
+
+window.detectDimensionForModal = async function () {
+  const provider_id = document.getElementById("hub-provider-select")?.value;
+  const model_name = document.getElementById("hub-model-name-input")?.value?.trim();
+  if (!provider_id || !model_name) {
+    await showAlertDialog("请先选择供应商并输入上游模型真实ID！", "提示");
+    return;
+  }
+  try {
+    showToast(`正在向供应商探测模型「${model_name}」输出维度...`);
+    const res = await fetch("/api/llm/detect_dimension", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider_id, model_name }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || "探测失败");
+    const dimInput = document.getElementById("hub-dimension-input");
+    if (dimInput) dimInput.value = data.dimension;
+    await showAlertDialog(data.message, "维度探测成功");
+  } catch (err) {
+    await showAlertDialog(`探测失败: ${err.message}`, "探测异常");
+  }
+};
 
 function updateFlowModelSelects() {
   const modelSel = document.getElementById("flow-cfg-model");
@@ -2626,7 +2908,39 @@ function updateFlowModelSelects() {
 }
 
 function initMultiProviderAndHub() {
-  document.getElementById("btn-add-provider").addEventListener("click", () => {
+  // 1. 初始化子 Tab 切换
+  const btnSubModels = document.getElementById("btn-subtab-models");
+  const btnSubAssignments = document.getElementById("btn-subtab-assignments");
+  const paneModels = document.getElementById("subtab-pane-models");
+  const paneAssignments = document.getElementById("subtab-pane-assignments");
+
+  if (btnSubModels && btnSubAssignments && paneModels && paneAssignments) {
+    btnSubModels.addEventListener("click", () => {
+      btnSubModels.className = "subtab-btn active px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-cyan-950 text-cyan-300 border border-cyan-700 shadow";
+      btnSubAssignments.className = "subtab-btn px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800";
+      paneModels.classList.remove("hidden");
+      paneAssignments.classList.add("hidden");
+    });
+
+    btnSubAssignments.addEventListener("click", () => {
+      btnSubAssignments.className = "subtab-btn active px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-cyan-950 text-cyan-300 border border-cyan-700 shadow";
+      btnSubModels.className = "subtab-btn px-4 py-2 rounded-xl text-xs font-bold transition flex items-center gap-2 bg-slate-900/60 text-slate-400 hover:text-slate-200 border border-slate-800";
+      paneAssignments.classList.remove("hidden");
+      paneModels.classList.add("hidden");
+      renderAssignmentsView();
+    });
+  }
+
+  // 2. 表格搜索与分类筛选监听
+  document.getElementById("filter-hub-search")?.addEventListener("input", () => {
+    renderModelsTable();
+  });
+  document.getElementById("filter-hub-type-select")?.addEventListener("change", () => {
+    renderModelsTable();
+  });
+
+  // 3. 供应商模态框交互
+  document.getElementById("btn-add-provider")?.addEventListener("click", () => {
     document.getElementById("modal-provider-title").innerHTML = '<i class="fa-solid fa-server text-cyan-400"></i><span>添加 LLM 供应商</span>';
     document.getElementById("provider-id-hidden").value = "";
     document.getElementById("provider-name-input").value = "";
@@ -2636,14 +2950,14 @@ function initMultiProviderAndHub() {
     document.getElementById("modal-provider").classList.remove("hidden");
   });
 
-  document.getElementById("btn-close-provider-modal").addEventListener("click", () => {
+  document.getElementById("btn-close-provider-modal")?.addEventListener("click", () => {
     document.getElementById("modal-provider").classList.add("hidden");
   });
-  document.getElementById("btn-cancel-provider").addEventListener("click", () => {
+  document.getElementById("btn-cancel-provider")?.addEventListener("click", () => {
     document.getElementById("modal-provider").classList.add("hidden");
   });
 
-  document.getElementById("form-provider").addEventListener("submit", async (e) => {
+  document.getElementById("form-provider")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const id = document.getElementById("provider-id-hidden").value.trim();
     const name = document.getElementById("provider-name-input").value.trim();
@@ -2660,35 +2974,51 @@ function initMultiProviderAndHub() {
       if (!res.ok) throw new Error("保存失败");
       document.getElementById("modal-provider").classList.add("hidden");
       await loadProviders();
+      await loadModelHub();
     } catch (err) {
       await showAlertDialog("保存供应商失败: " + err.message, "保存失败");
     }
   });
 
-  document.getElementById("btn-close-fetch-modal").addEventListener("click", () => {
+  // 4. 从供应商拉取模型
+  document.getElementById("btn-close-fetch-modal")?.addEventListener("click", () => {
     document.getElementById("modal-provider-models").classList.add("hidden");
   });
-  document.getElementById("btn-done-fetch-modal").addEventListener("click", () => {
+  document.getElementById("btn-done-fetch-modal")?.addEventListener("click", () => {
     document.getElementById("modal-provider-models").classList.add("hidden");
   });
-
-  document.getElementById("filter-fetched-models").addEventListener("input", (e) => {
+  document.getElementById("filter-fetched-models")?.addEventListener("input", (e) => {
     renderFetchedModels(e.target.value.toLowerCase().trim());
   });
 
-  document.getElementById("btn-add-hub-model").addEventListener("click", () => {
+  // 5. 模型条目弹窗交互
+  document.getElementById("btn-add-hub-model")?.addEventListener("click", () => {
     openHubItemModal();
   });
-
-  document.getElementById("btn-close-hub-modal").addEventListener("click", () => {
+  document.getElementById("btn-close-hub-modal")?.addEventListener("click", () => {
     document.getElementById("modal-hub-item").classList.add("hidden");
   });
-  document.getElementById("btn-cancel-hub").addEventListener("click", () => {
+  document.getElementById("btn-cancel-hub")?.addEventListener("click", () => {
     document.getElementById("modal-hub-item").classList.add("hidden");
   });
-
-  document.getElementById("hub-temp-input").addEventListener("input", (e) => {
+  document.getElementById("hub-temp-input")?.addEventListener("input", (e) => {
     document.getElementById("hub-temp-val").textContent = e.target.value;
+  });
+
+  const modelTypeSel = document.getElementById("hub-model-type-select");
+  if (modelTypeSel) {
+    modelTypeSel.addEventListener("change", () => {
+      const isEmbed = modelTypeSel.value === "embedding";
+      const dimBox = document.getElementById("hub-dimension-container");
+      if (dimBox) {
+        if (isEmbed) dimBox.classList.remove("hidden");
+        else dimBox.classList.add("hidden");
+      }
+    });
+  }
+
+  document.getElementById("btn-modal-detect-dim")?.addEventListener("click", () => {
+    detectDimensionForModal();
   });
 
   const updateTagPreview = () => {
@@ -2700,15 +3030,17 @@ function initMultiProviderAndHub() {
       document.getElementById("hub-tag-input").value = `${provName}/${modelName}`;
     }
   };
-  document.getElementById("hub-provider-select").addEventListener("change", updateTagPreview);
-  document.getElementById("hub-model-name-input").addEventListener("input", updateTagPreview);
+  document.getElementById("hub-provider-select")?.addEventListener("change", updateTagPreview);
+  document.getElementById("hub-model-name-input")?.addEventListener("input", updateTagPreview);
 
-  document.getElementById("form-hub-item").addEventListener("submit", async (e) => {
+  document.getElementById("form-hub-item")?.addEventListener("submit", async (e) => {
     e.preventDefault();
     const provider_id = document.getElementById("hub-provider-select").value;
     const model_name = document.getElementById("hub-model-name-input").value.trim();
     const tag = document.getElementById("hub-tag-input").value.trim();
     const display_name = document.getElementById("hub-display-name-input").value.trim();
+    const model_type = document.getElementById("hub-model-type-select")?.value || "llm";
+    const dimension = parseInt(document.getElementById("hub-dimension-input")?.value, 10) || null;
     const temperature = parseFloat(document.getElementById("hub-temp-input").value);
     const max_tokens = parseInt(document.getElementById("hub-maxtokens-input").value, 10);
     const context_limit = parseInt(document.getElementById("hub-context-input").value, 10);
@@ -2717,8 +3049,6 @@ function initMultiProviderAndHub() {
     const supports_video = document.getElementById("hub-support-video").checked;
     const prompt_price_per_1m = parseFloat(document.getElementById("hub-price-prompt-input")?.value || "0") || 0.0;
     const completion_price_per_1m = parseFloat(document.getElementById("hub-price-completion-input")?.value || "0") || 0.0;
-    const prompt_price_per_1k = Math.round((prompt_price_per_1m / 1000.0) * 1000000) / 1000000;
-    const completion_price_per_1k = Math.round((completion_price_per_1m / 1000.0) * 1000000) / 1000000;
 
     try {
       const res = await fetch("/api/llm/hub/item", {
@@ -2729,6 +3059,8 @@ function initMultiProviderAndHub() {
           provider_id,
           model_name,
           display_name,
+          model_type,
+          dimension,
           temperature,
           max_tokens,
           context_limit,
@@ -2737,8 +3069,6 @@ function initMultiProviderAndHub() {
           supports_video,
           prompt_price_per_1m,
           completion_price_per_1m,
-          prompt_price_per_1k,
-          completion_price_per_1k,
         }),
       });
       if (!res.ok) {
@@ -2751,8 +3081,76 @@ function initMultiProviderAndHub() {
       }
       document.getElementById("modal-hub-item").classList.add("hidden");
       await loadModelHub();
+      showToast(`模型「${display_name || model_name}」已成功保存！`);
     } catch (err) {
       await showAlertDialog("保存模型库条目失败: " + err.message, "保存失败");
+    }
+  });
+
+  // 6. 功能分配交互事件
+  document.getElementById("role-temp-input")?.addEventListener("input", (e) => {
+    const valEl = document.getElementById("role-temp-val");
+    if (valEl) valEl.textContent = e.target.value;
+  });
+
+  document.getElementById("btn-detect-embed-dim")?.addEventListener("click", async () => {
+    const sel = document.getElementById("role-model-select");
+    const modelTag = sel?.value;
+    const mItem = currentHubItems.find((x) => x.id === modelTag);
+    if (!mItem) {
+      await showAlertDialog("请先选择要探测维度的嵌入模型！", "提示");
+      return;
+    }
+    try {
+      showToast(`正在探测「${mItem.model_name}」维度...`);
+      const res = await fetch("/api/llm/detect_dimension", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider_id: mItem.provider_id, model_name: mItem.model_name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "探测失败");
+      const dimInp = document.getElementById("role-embed-dim-input");
+      if (dimInp) dimInp.value = data.dimension;
+      showToast(data.message);
+    } catch (e) {
+      await showAlertDialog(`维度探测失败: ${e.message}`, "探测异常");
+    }
+  });
+
+  document.getElementById("btn-save-role-assignment")?.addEventListener("click", async () => {
+    const roleKey = currentAssignmentRole;
+    const sel = document.getElementById("role-model-select");
+    const model_id = sel?.value || "";
+
+    const payload = {};
+    if (roleKey === "embedding") {
+      const dimension = parseInt(document.getElementById("role-embed-dim-input")?.value, 10) || 512;
+      payload.embedding = { model_id, strategy: "fixed", dimension };
+    } else {
+      const strategy = document.getElementById("role-strategy-select")?.value || "fixed";
+      const max_tokens = parseInt(document.getElementById("role-max-tokens-input")?.value, 10) || 1200;
+      const temperature = parseFloat(document.getElementById("role-temp-input")?.value) || 0.7;
+      payload[roleKey] = { model_id, strategy, max_tokens, temperature };
+    }
+
+    try {
+      const res = await fetch("/api/llm/assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "保存失败");
+      await loadModelHub();
+      const statusEl = document.getElementById("assignment-save-status");
+      if (statusEl) {
+        statusEl.textContent = "已成功保存并立即生效！";
+        setTimeout(() => (statusEl.textContent = ""), 4000);
+      }
+      showToast(`功能任务「${TASK_ROLES[roleKey]?.name || roleKey}」模型分配已保存！`);
+    } catch (e) {
+      await showAlertDialog(`保存功能分配失败: ${e.message}`, "保存失败");
     }
   });
 }
@@ -2773,6 +3171,7 @@ window.deleteProvider = async function (providerId) {
   if (await showConfirmDialog(`确定要删除供应商「${providerId}」吗？此操作不可逆！`, "删除供应商确认", true)) {
     await fetch(`/api/llm/providers/${providerId}`, { method: "DELETE" });
     await loadProviders();
+    await loadModelHub();
   }
 };
 
@@ -2826,15 +3225,21 @@ function renderFetchedModels(filter = "") {
 window.addModelFromFetched = function (modelName) {
   if (!activeFetchingProvider) return;
   const p = activeFetchingProvider;
+  const lower = modelName.toLowerCase();
+  const isEmbed = lower.includes("embed") || lower.includes("bge");
+  const isVlm = lower.includes("vl") || lower.includes("vision") || lower.includes("4o");
+
   openHubItemModal({
     provider_id: p.id,
     model_name: modelName,
     id: `${p.name}/${modelName}`,
     display_name: modelName,
-    temperature: 0.7,
-    max_tokens: 200,
-    context_limit: 12,
-    supports_vision: modelName.toLowerCase().includes("vl") || modelName.toLowerCase().includes("vision") || modelName.toLowerCase().includes("4o"),
+    model_type: isEmbed ? "embedding" : isVlm ? "vlm" : "llm",
+    dimension: isEmbed ? 512 : null,
+    temperature: isEmbed ? 0.0 : 0.7,
+    max_tokens: isEmbed ? 0 : 1200,
+    context_limit: isEmbed ? 0 : 12,
+    supports_vision: isVlm,
   });
 };
 
@@ -2844,11 +3249,21 @@ function openHubItemModal(item = null) {
     .map((p) => `<option value="${escapeHtml(p.id)}">${escapeHtml(p.name)} (${escapeHtml(p.id)})</option>`)
     .join("");
 
+  const typeSel = document.getElementById("hub-model-type-select");
+  const dimBox = document.getElementById("hub-dimension-container");
+
   if (item) {
     provSelect.value = item.provider_id || (currentProviders[0]?.id || "");
     document.getElementById("hub-model-name-input").value = item.model_name || "";
     document.getElementById("hub-tag-input").value = item.id || "";
     document.getElementById("hub-display-name-input").value = item.display_name || "";
+    if (typeSel) typeSel.value = item.model_type || "llm";
+    const dimInput = document.getElementById("hub-dimension-input");
+    if (dimInput) dimInput.value = item.dimension || "";
+    if (dimBox) {
+      if (item.model_type === "embedding") dimBox.classList.remove("hidden");
+      else dimBox.classList.add("hidden");
+    }
     document.getElementById("hub-temp-input").value = item.temperature !== undefined ? item.temperature : 0.7;
     document.getElementById("hub-temp-val").textContent = document.getElementById("hub-temp-input").value;
     document.getElementById("hub-maxtokens-input").value = item.max_tokens || 200;
@@ -2866,6 +3281,10 @@ function openHubItemModal(item = null) {
     document.getElementById("hub-model-name-input").value = "";
     document.getElementById("hub-tag-input").value = "";
     document.getElementById("hub-display-name-input").value = "";
+    if (typeSel) typeSel.value = "llm";
+    const dimInput = document.getElementById("hub-dimension-input");
+    if (dimInput) dimInput.value = "";
+    if (dimBox) dimBox.classList.add("hidden");
     document.getElementById("hub-temp-input").value = 0.7;
     document.getElementById("hub-temp-val").textContent = "0.7";
     document.getElementById("hub-maxtokens-input").value = 200;

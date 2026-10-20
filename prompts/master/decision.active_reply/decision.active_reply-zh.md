@@ -14,12 +14,18 @@
   3. 两人私聊密集的争吵或对骂。
   4. 刚刚音理已经主动回复过，避免连续插话刷屏。
 
-## 输出格式（必须输出纯JSON）：
+## 输出格式要求：
+必须直接输出合法的标准纯 JSON，严禁输出任何思考过程、Markdown 解释或多余字符。
+格式示例：
 ```json
 {
-  "should_reply": true 或 false,
-  "confidence": 0.0 到 1.0 之间的浮点数,
-  "reason": "简短判定理由（30字以内）",
-  "suggested_topic": "建议切入的话题关键词"
+  "should_reply": true,
+  "confidence": 0.85,
+  "reason": "群友正在讨论有趣日常话题，适合音理自然接话",
+  "suggested_topic": "美食与闲聊"
 }
 ```
+注意：
+1. should_reply 只能是布尔值 true 或 false（不可使用中文或引号包裹）。
+2. confidence 为 0.0 到 1.0 之间的浮点数。
+3. reason 为 30 字以内的简短中文判定原因。
