@@ -9,7 +9,54 @@ import socket
 import shutil
 import subprocess
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Tuple
+
+
+def detect_nvidia_gpu() -> Tuple[bool, str]:
+    """检测当前操作系统是否存在可用的 NVIDIA 独立显卡。"""
+    # 1. 优先使用 nvidia-smi 命令行查询
+    if shutil.which("nvidia-smi") is not None:
+        try:
+            res = subprocess.run(
+                ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+                capture_output=True,
+                text=True,
+                timeout=2.0
+            )
+            if res.returncode == 0 and res.stdout.strip():
+                gpu_names = [line.strip() for line in res.stdout.strip().splitlines() if line.strip()]
+                if gpu_names:
+                    return True, " / ".join(gpu_names)
+        except Exception:
+            pass
+
+    # 2. 尝试使用 torch.cuda.is_available()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            name = torch.cuda.get_device_name(0)
+            return True, name
+    except Exception:
+        pass
+
+    # 3. 尝试 Windows WMI 查询 Win32_VideoController
+    if sys.platform == "win32":
+        try:
+            res = subprocess.run(
+                ["powershell", "-NoProfile", "-Command", "Get-CimInstance Win32_VideoController | Select-Object -ExpandProperty Name"],
+                capture_output=True,
+                text=True,
+                timeout=3.0
+            )
+            if res.returncode == 0:
+                for line in res.stdout.splitlines():
+                    line = line.strip()
+                    if any(k in line.upper() for k in ["NVIDIA", "GEFORCE", "RTX", "GTX"]):
+                        return True, line
+        except Exception:
+            pass
+
+    return False, "未检测到 NVIDIA 独立显卡"
 
 
 class TTSServiceManager:
@@ -19,6 +66,18 @@ class TTSServiceManager:
         self.bot_root = bot_root or Path(__file__).resolve().parent.parent
         self.log_file = self.bot_root / "cache" / "tts_service.log"
         self._process: Optional[subprocess.Popen] = None
+
+    def get_effective_device(self) -> str:
+        """获取当前配置下的有效推理设备 ('cuda' 或 'cpu')。"""
+        from src.config import config_manager
+        cfg = config_manager.config.tts
+        device_setting = getattr(cfg, "device", "auto")
+        if device_setting == "cpu":
+            return "cpu"
+        if device_setting == "cuda":
+            return "cuda"
+        has_gpu, _ = detect_nvidia_gpu()
+        return "cuda" if has_gpu else "cpu"
 
     def is_port_in_use(self, port: int = 9880, host: str = "127.0.0.1") -> bool:
         """检测目标端口是否已被监听 (即服务是否在线)。"""
@@ -42,6 +101,8 @@ class TTSServiceManager:
             pass
 
         running = self.is_port_in_use(port)
+        has_gpu, gpu_name = detect_nvidia_gpu()
+        effective_device = self.get_effective_device()
         return {
             "running": running,
             "port": port,
@@ -51,6 +112,10 @@ class TTSServiceManager:
             "sovits_weights_path": getattr(cfg, "sovits_weights_path", ""),
             "mode": cfg.mode,
             "enabled": cfg.enabled,
+            "device": getattr(cfg, "device", "auto"),
+            "effective_device": effective_device,
+            "has_nvidia_gpu": has_gpu,
+            "gpu_name": gpu_name,
         }
 
     def switch_weights(self, gpt_weights_path: Optional[str] = None, sovits_weights_path: Optional[str] = None) -> Dict[str, Any]:
@@ -194,6 +259,11 @@ class TTSServiceManager:
         runtime_python = gpt_sovits_dir / "runtime" / "python.exe"
         py_exec = f'"{runtime_python}"' if runtime_python.exists() else "python"
 
+        effective_device = self.get_effective_device()
+        device_flag = f"-d {effective_device}"
+        cuda_env_line = 'set "CUDA_VISIBLE_DEVICES="' if effective_device == "cpu" else ""
+        device_tip = "【CPU 降级兼容模式 (无NVIDIA独显自动适配)】" if effective_device == "cpu" else "【NVIDIA CUDA 显卡加速模式】"
+
         bat_content = f"""@echo off
 cd /d "{gpt_sovits_dir}"
 title GPT-SoVITS 语音合成服务 [端口 9880]
@@ -204,6 +274,7 @@ echo ========================================================
 echo.
 echo 工作目录: {gpt_sovits_dir}
 echo 接口地址: http://127.0.0.1:9880/tts
+echo 运行设备: {device_tip}
 echo 正在启动语音合成服务...
 echo ========================================================
 echo.
@@ -211,9 +282,10 @@ echo.
 set "PATH={gpt_sovits_dir}\\runtime;%PATH%"
 set "PYTHONUNBUFFERED=1"
 set "PYTHONIOENCODING=utf-8"
+{cuda_env_line}
 
 chcp 65001 >nul
-{py_exec} api_v2.py -a 0.0.0.0 -p 9880 -c GPT_SoVITS/configs/tts_infer.yaml
+{py_exec} api_v2.py -a 0.0.0.0 -p 9880 -c GPT_SoVITS/configs/tts_infer.yaml {device_flag}
 
 if errorlevel 1 (
     chcp 936 >nul
@@ -227,7 +299,7 @@ pause
         crlf_content = bat_content.strip().replace('\r\n', '\n').replace('\n', '\r\n') + '\r\n'
         with open(start_bat_path, 'wb') as f:
             f.write(crlf_content.encode('gbk'))
-        print(f"[TTSManager] 已更新 start_tts.bat: {start_bat_path}")
+        print(f"[TTSManager] 已更新 start_tts.bat: {start_bat_path} ({effective_device})")
 
     def start_service(self) -> Dict[str, Any]:
         """一键在后台启动 GPT-SoVITS 服务。"""
@@ -247,17 +319,21 @@ pause
         self.log_file.parent.mkdir(parents=True, exist_ok=True)
         log_out = open(self.log_file, "a", encoding="utf-8")
 
+        effective_device = self.get_effective_device()
         cmd = [
             python_exe,
             "api_v2.py",
             "-a", "0.0.0.0",
             "-p", "9880",
-            "-c", "GPT_SoVITS/configs/tts_infer.yaml"
+            "-c", "GPT_SoVITS/configs/tts_infer.yaml",
+            "-d", effective_device,
         ]
 
         env = os.environ.copy()
         env["PYTHONUNBUFFERED"] = "1"
         env["PYTHONIOENCODING"] = "utf-8"
+        if effective_device == "cpu":
+            env["CUDA_VISIBLE_DEVICES"] = ""
         if runtime_python.exists():
             env["PATH"] = f"{runtime_python.parent};" + env.get("PATH", "")
 

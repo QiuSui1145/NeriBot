@@ -79,5 +79,88 @@ class TestModelHubAndAssignments(unittest.TestCase):
         self.assertEqual(builtin_item["dimension"], 512)
 
 
+    def test_05_multi_model_fallback_and_random_dispatch(self):
+        """测试多模型列表、备用与轮询候选生成及保存。"""
+        # 1. 保存多模型列表与 fallback 策略
+        save_resp = self.client.post(
+            "/api/llm/assignments",
+            json={
+                "replyer": {
+                    "models": ["SiliconFlow/deepseek-ai/DeepSeek-V3", "OpenAI/gpt-4o-mini"],
+                    "strategy": "fallback",
+                    "max_tokens": 1200,
+                    "temperature": 0.7
+                }
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(save_resp.status_code, 200)
+        data = save_resp.json()["assignments"]["replyer"]
+        self.assertEqual(data["models"], ["SiliconFlow/deepseek-ai/DeepSeek-V3", "OpenAI/gpt-4o-mini"])
+        self.assertEqual(data["model_id"], "SiliconFlow/deepseek-ai/DeepSeek-V3")
+        self.assertEqual(data["strategy"], "fallback")
+
+        from src.llm_client import llm_client
+        cands, strat = llm_client.get_candidate_models(role="replyer")
+        self.assertEqual(strat, "fallback")
+        self.assertEqual(cands, ["SiliconFlow/deepseek-ai/DeepSeek-V3", "OpenAI/gpt-4o-mini"])
+
+        # 2. 切换为 random 策略
+        self.client.post(
+            "/api/llm/assignments",
+            json={
+                "replyer": {
+                    "models": ["modelA", "modelB"],
+                    "strategy": "random",
+                }
+            },
+            headers=self.headers,
+        )
+        cands_rnd, strat_rnd = llm_client.get_candidate_models(role="replyer")
+        self.assertEqual(strat_rnd, "random")
+        self.assertEqual(set(cands_rnd), {"modelA", "modelB"})
+
+    def test_06_hardware_gpu_status_endpoint(self):
+        """测试硬件 GPU 环境检测接口。"""
+        resp = self.client.get("/api/hardware/gpu_status", headers=self.headers)
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertIn("has_nvidia_gpu", data)
+        self.assertIn("effective_device", data)
+        self.assertIn(data["effective_device"], ["cuda", "cpu"])
+
+    def test_07_planner_utils_merged_synchronization(self):
+        """测试决策与工具模型合并保存后的完全同步。"""
+        save_resp = self.client.post(
+            "/api/llm/assignments",
+            json={
+                "planner": {
+                    "models": ["SiliconFlow/deepseek-ai/DeepSeek-V3"],
+                    "strategy": "fixed",
+                    "max_tokens": 500,
+                    "temperature": 0.2
+                }
+            },
+            headers=self.headers,
+        )
+        self.assertEqual(save_resp.status_code, 200)
+        assigns = save_resp.json()["assignments"]
+        self.assertEqual(assigns["planner"]["models"], ["SiliconFlow/deepseek-ai/DeepSeek-V3"])
+        self.assertEqual(assigns["utils"]["models"], ["SiliconFlow/deepseek-ai/DeepSeek-V3"])
+        self.assertEqual(assigns["utils"]["max_tokens"], 500)
+
+    def test_08_detect_dimension_with_tag(self):
+        """测试通过 tag 自动定位内置或自定义模型的维度探测。"""
+        resp = self.client.post(
+            "/api/llm/detect_dimension",
+            json={"tag": "builtin/bge-small-zh-v1.5"},
+            headers=self.headers,
+        )
+        self.assertEqual(resp.status_code, 200)
+        data = resp.json()
+        self.assertEqual(data["dimension"], 512)
+        self.assertEqual(data["status"], "success")
+
+
 if __name__ == "__main__":
     unittest.main()

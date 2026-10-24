@@ -78,6 +78,7 @@ class CommandsConfig(BaseModel):
 
 class TTSConfig(BaseModel):
     enabled: bool = Field(default=True, description="是否开启 TTS 语音合成")
+    device: str = Field(default="auto", description="推理硬件设备: auto(智能匹配) / cuda(强制GPU) / cpu(强制CPU降级)")
     api_url: str = Field(default="http://127.0.0.1:9880/tts", description="本地 GPT-SoVITS TTS API 地址")
     gpt_sovits_dir: str = Field(default=r"D:\GPT-SoVITS\GPT-SoVITS-v2pro-20250604", description="GPT-SoVITS 根目录路径")
     mode: str = Field(default="simultaneous", description="模式: simultaneous(同声传译: 中文文本+日语配音) / text_and_voice(同文同音) / voice_only(仅语音) / text_only(仅文本)")
@@ -160,24 +161,28 @@ class ModelAssignmentsConfig(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
     replyer: Dict[str, Any] = Field(default_factory=lambda: {
         "model_id": "",
+        "models": [],
         "strategy": "fixed",
         "max_tokens": 1200,
         "temperature": 0.7
     }, description="主回复模型分配")
     planner: Dict[str, Any] = Field(default_factory=lambda: {
         "model_id": "",
+        "models": [],
         "strategy": "fixed",
         "max_tokens": 400,
         "temperature": 0.2
-    }, description="计划决策模型分配")
+    }, description="决策与工具模型分配")
     utils: Dict[str, Any] = Field(default_factory=lambda: {
         "model_id": "",
+        "models": [],
         "strategy": "fixed",
         "max_tokens": 600,
         "temperature": 0.3
-    }, description="辅助工具模型分配")
+    }, description="辅助工具模型分配(与planner合并)")
     vlm: Dict[str, Any] = Field(default_factory=lambda: {
         "model_id": "",
+        "models": [],
         "strategy": "fixed",
         "max_tokens": 1000,
         "temperature": 0.7
@@ -318,11 +323,34 @@ class ConfigManager:
                 supports_video=False,
             ))
 
-        # 确保功能分配 model_assignments 健全性
+        # 确保功能分配 model_assignments 健全性与多模型列表完整
+        for role_key in ["replyer", "planner", "utils", "vlm"]:
+            role_dict = getattr(cfg.model_assignments, role_key, {})
+            if "models" not in role_dict or not isinstance(role_dict["models"], list):
+                role_dict["models"] = [role_dict["model_id"]] if role_dict.get("model_id") else []
+            elif role_dict.get("model_id") and role_dict["model_id"] not in role_dict["models"]:
+                role_dict["models"].insert(0, role_dict["model_id"])
+            if not role_dict.get("model_id") and role_dict["models"]:
+                role_dict["model_id"] = role_dict["models"][0]
+
+        # 决策与工具模型合并同步
+        if cfg.model_assignments.planner.get("models"):
+            cfg.model_assignments.utils.update({
+                "model_id": cfg.model_assignments.planner.get("model_id", ""),
+                "models": list(cfg.model_assignments.planner.get("models", [])),
+                "strategy": cfg.model_assignments.planner.get("strategy", "fixed"),
+            })
+
         if not cfg.model_assignments.replyer.get("model_id"):
-            cfg.model_assignments.replyer["model_id"] = cfg.active_model_id or (cfg.model_hub[0].id if cfg.model_hub else "")
+            fallback_id = cfg.active_model_id or (cfg.model_hub[0].id if cfg.model_hub else "")
+            cfg.model_assignments.replyer["model_id"] = fallback_id
+            cfg.model_assignments.replyer["models"] = [fallback_id] if fallback_id else []
         if not cfg.model_assignments.planner.get("model_id"):
-            cfg.model_assignments.planner["model_id"] = cfg.active_decision_model_id or cfg.model_assignments.replyer.get("model_id", "")
+            fallback_dec = cfg.active_decision_model_id or cfg.model_assignments.replyer.get("model_id", "")
+            cfg.model_assignments.planner["model_id"] = fallback_dec
+            cfg.model_assignments.planner["models"] = [fallback_dec] if fallback_dec else []
+            cfg.model_assignments.utils["model_id"] = fallback_dec
+            cfg.model_assignments.utils["models"] = [fallback_dec] if fallback_dec else []
         if not cfg.model_assignments.embedding.get("model_id"):
             cfg.model_assignments.embedding["model_id"] = builtin_embed_id
             cfg.model_assignments.embedding["dimension"] = 512
@@ -332,6 +360,15 @@ class ConfigManager:
             cfg.active_model_id = cfg.model_assignments.replyer["model_id"]
         if cfg.model_assignments.planner.get("model_id"):
             cfg.active_decision_model_id = cfg.model_assignments.planner["model_id"]
+
+        # TTS 智能硬件检测：若未检测到 NVIDIA 独立显卡且处于 auto 设备模式，默认禁用 TTS
+        try:
+            from src.tts_service_manager import detect_nvidia_gpu
+            has_gpu, _ = detect_nvidia_gpu()
+            if not has_gpu and getattr(cfg.tts, "device", "auto") == "auto":
+                cfg.tts.enabled = False
+        except Exception:
+            pass
 
         if not cfg.active_model_id and cfg.model_hub:
             cfg.active_model_id = cfg.model_hub[0].id

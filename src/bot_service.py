@@ -309,16 +309,28 @@ class BotService:
                 else:
                     print(f"[GroupMessage] 群 {group_id} 消息未@且未唤醒，记录并旁观。")
                     
+                    # 检查群聊主模型是否支持视觉，若不支持且有图片则调用 VLM 自动转述
+                    rec_tag = sess_cfg.model_id or cfg.active_model_id or cfg.llm.model
+                    rec_item = cfg.get_model_hub_item(rec_tag)
+                    rec_vision = rec_item.supports_vision if rec_item else False
+                    recorded_text = clean_text
+                    if image_urls and not rec_vision:
+                        vlm_desc = await self.describe_images_with_vlm(image_urls)
+                        if vlm_desc:
+                            recorded_text = (f"{clean_text} [收到图片，画面视觉转述：{vlm_desc}]" if clean_text else f"[收到图片，画面视觉转述：{vlm_desc}]").strip()
+                        else:
+                            recorded_text = (f"{clean_text} [收到群友发送的图片]" if clean_text else "[收到群友发送的图片]").strip()
+
                     # 【核心修改】将不主动回复的群聊消息也压入主信息流，以便 WebUI 监控和 LLM 获取上下文
                     sess = context_manager.get_session(session_type, target_id)
                     sender_label = f"[哥哥/主人] {nickname}" if self.check_is_master(user_id) else nickname
-                    evicted = sess.add_message("user", clean_text, user_name=sender_label, images=image_urls or [])
+                    evicted = sess.add_message("user", recorded_text, user_name=sender_label, images=image_urls if rec_vision else [])
                     if evicted:
                         await self._summarize_context_async(session_type, target_id, evicted)
                     context_manager.save()
                     
                     # 记录水群日志供 active_reply 决策
-                    context_manager.record_group_chatter(group_id, user_id, nickname, clean_text)
+                    context_manager.record_group_chatter(group_id, user_id, nickname, recorded_text)
 
                     if active_reply_engine.should_check_group(group_id):
                         should_reply, reason = await active_reply_engine.evaluate(group_id)
@@ -352,6 +364,53 @@ class BotService:
         except Exception as e:
             print(f"[BotService] 处理消息发生异常: {e}")
             traceback.print_exc()
+
+    async def describe_images_with_vlm(self, image_urls: List[str]) -> str:
+        """当主模型不具备多模态视觉能力时，调用功能分配中配置的 VLM 模型对图片进行画面转述。"""
+        if not image_urls:
+            return ""
+        cfg = config_manager.config
+        vlm_cfg = cfg.model_assignments.vlm if hasattr(cfg, "model_assignments") else {}
+        vlm_models = vlm_cfg.get("models") or ([vlm_cfg.get("model_id")] if vlm_cfg.get("model_id") else [])
+        if not vlm_models:
+            vision_items = [m.id for m in cfg.model_hub if m.supports_vision or m.model_type == "vlm"]
+            if vision_items:
+                vlm_models = [vision_items[0]]
+
+        if not vlm_models or not vlm_models[0]:
+            print("[BotService] 未配置可用的 VLM 视觉转述模型，跳过转述")
+            return ""
+
+        target_vlm_tag = vlm_models[0]
+        print(f"[BotService] 当前主模型不支持多模态，调用 VLM 模型 [{target_vlm_tag}] 执行图片转述...")
+
+        content_parts = [
+            {
+                "type": "text",
+                "text": "请简明扼要地描述这张图片中的主要画面内容、场景氛围、关键文字或人物动作细节（50字以内，语言精炼，供无法看图的AI对话理解）："
+            }
+        ]
+        for url in image_urls[:2]:
+            content_parts.append({"type": "image_url", "image_url": {"url": url}})
+
+        try:
+            desc, _ = await llm_client.chat_completion(
+                messages=[{"role": "user", "content": content_parts}],
+                session_type="system",
+                is_decision=False,
+                model_tag=target_vlm_tag,
+                role="vlm",
+                max_tokens_override=300,
+                temperature_override=0.3,
+            )
+            import re
+            cleaned_desc = re.sub(r'<think>[\s\S]*?</think>', '', desc, flags=re.IGNORECASE).strip()
+            cleaned_desc = re.sub(r'<thought>[\s\S]*?</thought>', '', cleaned_desc, flags=re.IGNORECASE).strip()
+            print(f"[BotService] VLM 视觉转述完成: {cleaned_desc[:60]}...")
+            return cleaned_desc
+        except Exception as e:
+            print(f"[BotService] VLM 转述图片异常: {e}")
+            return ""
 
     async def _process_chat(
         self,
@@ -410,20 +469,28 @@ class BotService:
         speaker_profile, is_master = self.build_speaker_profile(user_id, nickname)
         system_prompt += speaker_profile
 
+        # 5. 检查所用模型的多模态图传支持
+        model_tag = sess_cfg.model_id or cfg.active_model_id or cfg.llm.model
+        hub_item = cfg.get_model_hub_item(model_tag)
+        supports_vision = hub_item.supports_vision if hub_item else False
+
+        effective_user_text = user_text
+        if image_urls and not supports_vision:
+            vlm_desc = await self.describe_images_with_vlm(image_urls)
+            if vlm_desc:
+                effective_user_text = (f"{user_text} [收到图片，画面视觉转述：{vlm_desc}]" if user_text else f"[收到图片，画面视觉转述：{vlm_desc}]").strip()
+            else:
+                effective_user_text = (f"{user_text} [收到群友发送的图片]" if user_text else "[收到群友发送的图片]").strip()
+
         # 4. 获取当前会话上下文并写入用户输入（包含多模态图片）
         # 主动回复时，真实的群聊消息在前面已写入上下文，绝对不能把提示指令当做用户发言写入历史！
         sess = context_manager.get_session(session_type, target_id)
         if not is_active_reply:
             sender_label = f"[哥哥/主人] {nickname}" if is_master else nickname
-            evicted_user = sess.add_message("user", user_text, user_name=sender_label, images=image_urls or [])
+            evicted_user = sess.add_message("user", effective_user_text, user_name=sender_label, images=image_urls if supports_vision else [])
             context_manager.save()
         else:
             evicted_user = []
-
-        # 5. 检查所用模型的多模态图传支持
-        model_tag = sess_cfg.model_id or cfg.active_model_id or cfg.llm.model
-        hub_item = cfg.get_model_hub_item(model_tag)
-        supports_vision = hub_item.supports_vision if hub_item else False
 
         # 可插拔记忆系统驱动检索召回
         try:

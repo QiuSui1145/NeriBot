@@ -103,8 +103,9 @@ class SetActiveModelRequest(BaseModel):
 
 class DetectDimensionRequest(BaseModel):
     model_config = ConfigDict(protected_namespaces=())
-    provider_id: str
-    model_name: str
+    tag: Optional[str] = None
+    provider_id: Optional[str] = None
+    model_name: Optional[str] = None
     base_url: Optional[str] = None
     api_key: Optional[str] = None
 
@@ -592,16 +593,20 @@ async def set_active_hub_models(req: SetActiveModelRequest, _: str = Depends(req
 
 @router.post("/api/llm/detect_dimension")
 async def detect_dimension(req: DetectDimensionRequest, _: str = Depends(require_auth)):
-    if req.provider_id == "builtin" or req.model_name in ("bge-small-zh-v1.5", "BAAI/bge-small-zh-v1.5"):
+    cfg = config_manager.config
+    model_item = config_manager.get_model_hub_item(req.tag) if req.tag else None
+    provider_id = req.provider_id or (model_item.provider_id if model_item else "")
+    model_name = req.model_name or (model_item.model_name if model_item else "")
+
+    if provider_id == "builtin" or model_name in ("bge-small-zh-v1.5", "BAAI/bge-small-zh-v1.5") or "bge-small-zh-v1.5" in (req.tag or ""):
         return {
             "dimension": 512,
-            "model_name": req.model_name,
+            "model_name": model_name or "bge-small-zh-v1.5",
             "message": "内置离线向量模型探测成功 (512维)",
             "status": "success"
         }
 
-    cfg = config_manager.config
-    provider = cfg.get_provider(req.provider_id)
+    provider = cfg.get_provider(provider_id)
     b_url = req.base_url or (provider.base_url if provider else cfg.llm.base_url)
     a_key = req.api_key if req.api_key is not None else (provider.api_key if provider else cfg.llm.api_key)
 
@@ -720,22 +725,36 @@ async def save_model_assignments(req: ModelAssignmentsSaveRequest, _: str = Depe
 
     if req.replyer is not None:
         cfg.model_assignments.replyer.update(req.replyer)
-        if "model_id" in req.replyer and req.replyer["model_id"]:
+        models = req.replyer.get("models")
+        if models and isinstance(models, list) and models:
+            cfg.model_assignments.replyer["model_id"] = models[0]
+            cfg.active_model_id = models[0]
+        elif "model_id" in req.replyer and req.replyer["model_id"]:
             cfg.active_model_id = req.replyer["model_id"]
         updated = True
 
     if req.planner is not None:
         cfg.model_assignments.planner.update(req.planner)
-        if "model_id" in req.planner and req.planner["model_id"]:
+        # 决策与工具模型合并：保存时同步更新 utils
+        cfg.model_assignments.utils.update(req.planner)
+        models = req.planner.get("models")
+        if models and isinstance(models, list) and models:
+            cfg.model_assignments.planner["model_id"] = models[0]
+            cfg.model_assignments.utils["model_id"] = models[0]
+            cfg.active_decision_model_id = models[0]
+        elif "model_id" in req.planner and req.planner["model_id"]:
             cfg.active_decision_model_id = req.planner["model_id"]
         updated = True
 
-    if req.utils is not None:
+    if req.utils is not None and req.planner is None:
         cfg.model_assignments.utils.update(req.utils)
         updated = True
 
     if req.vlm is not None:
         cfg.model_assignments.vlm.update(req.vlm)
+        models = req.vlm.get("models")
+        if models and isinstance(models, list) and models:
+            cfg.model_assignments.vlm["model_id"] = models[0]
         updated = True
 
     if req.embedding is not None:
@@ -758,6 +777,20 @@ async def save_model_assignments(req: ModelAssignmentsSaveRequest, _: str = Depe
         "assignments": cfg.model_assignments.model_dump()
     }
 
+
+@router.get("/api/hardware/gpu_status")
+async def get_gpu_status(_: str = Depends(require_auth)):
+    from src.tts_service_manager import detect_nvidia_gpu, tts_service_manager
+    has_gpu, gpu_name = detect_nvidia_gpu()
+    effective_device = tts_service_manager.get_effective_device()
+    cfg = config_manager.config.tts
+    return {
+        "has_nvidia_gpu": has_gpu,
+        "gpu_name": gpu_name,
+        "configured_device": getattr(cfg, "device", "auto"),
+        "effective_device": effective_device,
+        "tts_enabled": cfg.enabled,
+    }
 
 # ---------------- 本地 TTS 测试 ----------------
 @router.post("/api/tts/test")

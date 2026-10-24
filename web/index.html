@@ -886,21 +886,48 @@
 
                 <!-- 模型配置表单 -->
                 <div class="space-y-4">
-                  <div>
-                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">绑定执行模型</label>
+                  <!-- 非 Embedding: 多模型调度列表与排序 -->
+                  <div id="role-multi-models-block" class="space-y-2.5">
+                    <div class="flex items-center justify-between">
+                      <label class="block text-xs font-semibold text-slate-300">
+                        <span>调度执行模型列表</span>
+                        <span class="text-[11px] text-slate-400 font-normal"> (可添加多个模型并调整上下顺序以配合轮询或故障备用策略)</span>
+                      </label>
+                    </div>
+
+                    <!-- 当前已配置模型列表容器 -->
+                    <div id="role-models-list" class="space-y-1.5 min-h-[50px] p-2 rounded-xl bg-slate-950/60 border border-slate-800">
+                      <!-- 动态填充已分配模型条目 -->
+                    </div>
+
+                    <!-- 添加模型到列表控件 -->
+                    <div class="flex items-center gap-2 pt-1">
+                      <select id="role-add-model-select" class="input-field text-xs flex-1 py-1.5">
+                        <!-- 模型库可选模型 -->
+                      </select>
+                      <button type="button" id="btn-add-model-to-role" class="btn-secondary px-3 py-1.5 text-xs flex items-center gap-1.5 text-cyan-300 border-cyan-800/80 hover:bg-cyan-950/60 whitespace-nowrap">
+                        <i class="fa-solid fa-plus text-cyan-400"></i>
+                        <span>加入列表</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Embedding 专属单一模型绑定控件 -->
+                  <div id="role-single-model-block" class="hidden space-y-1">
+                    <label class="block text-xs font-semibold text-slate-300 mb-1.5">绑定向量嵌入模型</label>
                     <select id="role-model-select" class="input-field text-xs w-full py-2">
                       <!-- 动态选项 -->
                     </select>
-                    <p id="role-model-hint" class="text-[11px] text-slate-500 mt-1">从系统模型库中挑选最适合本任务特性的模型</p>
+                    <p id="role-model-hint" class="text-[11px] text-slate-500 mt-1">切换向量模型时系统将自动探测其输出维度并自动填报</p>
                   </div>
 
-                  <!-- 非 Embedding 模型的参数项 -->
+                  <!-- 非 Embedding 模型的参数项与策略说明 -->
                   <div id="role-llm-params-block" class="space-y-4">
                     <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label class="block text-xs font-semibold text-slate-300 mb-1">选择策略</label>
+                        <label class="block text-xs font-semibold text-slate-300 mb-1">调度策略</label>
                         <select id="role-strategy-select" class="input-field text-xs">
-                          <option value="fixed">固定模型 (Fixed)</option>
+                          <option value="fixed">固定首选 (Fixed)</option>
                           <option value="random">随机轮询 (Random)</option>
                           <option value="fallback">故障备用 (Fallback)</option>
                         </select>
@@ -913,6 +940,10 @@
                         <label class="block text-xs font-semibold text-slate-300 mb-1">采样温度 (<span id="role-temp-val">0.7</span>)</label>
                         <input type="range" id="role-temp-input" min="0" max="1.5" step="0.05" value="0.7" class="w-full accent-cyan-400 mt-2">
                       </div>
+                    </div>
+                    <div id="role-strategy-hint-box" class="p-2.5 rounded-lg bg-slate-900/80 border border-slate-800 text-[11px] text-slate-400 flex items-start gap-2">
+                      <i class="fa-solid fa-circle-info text-cyan-400 mt-0.5"></i>
+                      <span id="role-strategy-hint-text">固定首选模式：仅使用列表中排在第 1 位的首选模型。</span>
                     </div>
                   </div>
 
@@ -969,7 +1000,31 @@
                 <i class="fa-solid fa-headphones text-cyan-400"></i>
                 <span>本地 GPT-SoVITS 语音合成与同声传译设定</span>
               </h3>
-              <p class="text-xs text-slate-400 mt-1">搭载已修复的 V4 LoRA + Base 底模架构，RTX 4060 GPU 毫秒级声学推理。</p>
+              <p class="text-xs text-slate-400 mt-1">搭载已修复的 V4 LoRA + Base 底模架构，支持 NVIDIA CUDA 毫秒级加速与无独显 CPU 自动降级推理。</p>
+            </div>
+
+            <!-- 硬件环境智能检测与加速指示卡片 -->
+            <div id="tts-hardware-card" class="p-4 rounded-xl bg-slate-900/80 border border-slate-700/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+              <div class="flex items-center gap-3">
+                <div id="tts-hw-icon" class="w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-700/60 flex items-center justify-center text-emerald-400 text-lg shrink-0">
+                  <i class="fa-solid fa-microchip"></i>
+                </div>
+                <div>
+                  <div class="flex items-center gap-2">
+                    <span id="tts-hw-title" class="text-xs font-bold text-slate-100">硬件加速环境检测</span>
+                    <span id="tts-hw-badge" class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800">检测中</span>
+                  </div>
+                  <p id="tts-hw-desc" class="text-[11px] text-slate-400 mt-0.5">正在检测宿主机 NVIDIA 显卡与 CUDA 支持环境...</p>
+                </div>
+              </div>
+              <div class="flex items-center gap-2 self-end sm:self-center">
+                <label class="text-[11px] text-slate-400 whitespace-nowrap">推理运算设备:</label>
+                <select id="cfg-tts-device" class="input-field text-xs py-1.5 px-2.5">
+                  <option value="auto">智能检测 (自动选择)</option>
+                  <option value="cuda">强制 CUDA (NVIDIA显卡加速)</option>
+                  <option value="cpu">强制 CPU 降级推理 (兼容模式)</option>
+                </select>
+              </div>
             </div>
 
             <!-- GPT-SoVITS 本地服务与环境集成卡片 -->
@@ -2332,8 +2387,30 @@
               <select id="hub-provider-select" class="input-field text-xs" required></select>
             </div>
             <div>
-              <label class="block text-xs font-semibold text-slate-300 mb-1">上游模型真实ID</label>
-              <input type="text" id="hub-model-name-input" class="input-field text-xs" placeholder="deepseek-ai/DeepSeek-V3" required>
+              <div class="flex items-center justify-between mb-1">
+                <label class="block text-xs font-semibold text-slate-300">上游模型选择</label>
+                <div class="flex items-center gap-2">
+                  <button type="button" id="btn-fetch-hub-models" class="text-[11px] text-cyan-400 hover:text-cyan-300 flex items-center gap-1">
+                    <i class="fa-solid fa-arrows-rotate"></i>
+                    <span>拉取列表</span>
+                  </button>
+                  <button type="button" id="btn-toggle-manual-model" class="text-[11px] text-slate-400 hover:text-slate-200">
+                    <span id="btn-toggle-manual-label">手动输入</span>
+                  </button>
+                </div>
+              </div>
+              <div id="hub-model-select-wrapper" class="relative">
+                <select id="hub-model-select" class="input-field text-xs w-full py-2">
+                  <option value="">-- 请选择或拉取上游模型 --</option>
+                </select>
+                <div id="hub-model-select-loading" class="hidden absolute inset-0 bg-slate-900/95 rounded-xl flex items-center justify-center text-xs text-cyan-300 gap-1.5 z-10">
+                  <i class="fa-solid fa-circle-notch fa-spin"></i>
+                  <span>正在拉取供应商模型列表...</span>
+                </div>
+              </div>
+              <div id="hub-model-manual-wrapper" class="hidden">
+                <input type="text" id="hub-model-name-input" class="input-field text-xs" placeholder="例如 deepseek-ai/DeepSeek-V3">
+              </div>
             </div>
           </div>
 

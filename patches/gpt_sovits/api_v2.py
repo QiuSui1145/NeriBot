@@ -138,16 +138,33 @@ parser = argparse.ArgumentParser(description="GPT-SoVITS api")
 parser.add_argument("-c", "--tts_config", type=str, default="GPT_SoVITS/configs/tts_infer.yaml", help="tts_infer路径")
 parser.add_argument("-a", "--bind_addr", type=str, default="127.0.0.1", help="default: 127.0.0.1")
 parser.add_argument("-p", "--port", type=int, default="9880", help="default: 9880")
+parser.add_argument("-d", "--device", type=str, default="", help="推理计算设备: cuda 或 cpu")
 args = parser.parse_args()
 config_path = args.tts_config
 port = args.port
 host = args.bind_addr
+device_arg = args.device.strip().lower() if args.device else ""
 argv = sys.argv
 
 if config_path in [None, ""]:
     config_path = "GPT-SoVITS/configs/tts_infer.yaml"
 
+if device_arg == "cpu":
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+
 tts_config = TTS_Config(config_path)
+if device_arg:
+    tts_config.device = device_arg
+    if device_arg == "cpu":
+        tts_config.is_half = False
+    configs_dict = getattr(tts_config, "configs", {})
+    if isinstance(configs_dict, dict):
+        for k in configs_dict:
+            if isinstance(configs_dict[k], dict):
+                configs_dict[k]["device"] = device_arg
+                if device_arg == "cpu":
+                    configs_dict[k]["is_half"] = False
+
 print(tts_config)
 tts_pipeline = TTS(tts_config)
 

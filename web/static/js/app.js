@@ -1148,6 +1148,10 @@ async function loadConfig() {
 
     // TTS
     document.getElementById("cfg-tts-enabled").checked = cfg.tts.enabled;
+    if (document.getElementById("cfg-tts-device")) {
+      document.getElementById("cfg-tts-device").value = cfg.tts.device || "auto";
+    }
+    checkHardwareStatus();
     document.getElementById("cfg-tts-url").value = cfg.tts.api_url || "";
     if (document.getElementById("cfg-gpt-sovits-dir")) {
       document.getElementById("cfg-gpt-sovits-dir").value = cfg.tts.gpt_sovits_dir || "D:\\GPT-SoVITS\\GPT-SoVITS-v2pro-20250604";
@@ -1507,6 +1511,7 @@ function initForms() {
     const payload = {
       tts: {
         enabled: document.getElementById("cfg-tts-enabled").checked,
+        device: document.getElementById("cfg-tts-device") ? document.getElementById("cfg-tts-device").value : "auto",
         api_url: document.getElementById("cfg-tts-url").value.trim(),
         gpt_sovits_dir: document.getElementById("cfg-gpt-sovits-dir") ? document.getElementById("cfg-gpt-sovits-dir").value.trim() : "",
         gpt_weights_path: document.getElementById("cfg-tts-gpt-weights") ? document.getElementById("cfg-tts-gpt-weights").value.trim() : "",
@@ -1747,7 +1752,48 @@ async function saveConfigToServer(partialData, successMsg) {
 }
 
 // ---------------- 6.1 GPT-SoVITS 补丁与服务管理 ----------------
+async function checkHardwareStatus() {
+  const badge = document.getElementById("tts-hw-badge");
+  const desc = document.getElementById("tts-hw-desc");
+  const icon = document.getElementById("tts-hw-icon");
+  const devSel = document.getElementById("cfg-tts-device");
+  try {
+    const res = await fetch("/api/hardware/gpu_status");
+    if (!res.ok) return;
+    const data = await res.json();
+    if (devSel && data.configured_device) {
+      devSel.value = data.configured_device;
+    }
+    if (data.has_nvidia_gpu) {
+      if (badge) {
+        badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800";
+        badge.textContent = "NVIDIA 显卡加速可用";
+      }
+      if (desc) {
+        desc.textContent = `已检测到 ${data.gpu_name}，毫秒级声学推理加速已就绪 (当前有效设备: ${data.effective_device.toUpperCase()})。`;
+      }
+      if (icon) {
+        icon.className = "w-10 h-10 rounded-xl bg-emerald-950/80 border border-emerald-700/60 flex items-center justify-center text-emerald-400 text-lg shrink-0";
+      }
+    } else {
+      if (badge) {
+        badge.className = "px-2 py-0.5 rounded text-[10px] font-bold bg-amber-950 text-amber-300 border border-amber-800";
+        badge.textContent = "未检测到独显 (CPU降级模式)";
+      }
+      if (desc) {
+        desc.textContent = "未检测到 NVIDIA 独立显卡，系统已为您自动配置 CPU 降级推理。TTS 功能默认关闭，如需使用可随时手动开启。";
+      }
+      if (icon) {
+        icon.className = "w-10 h-10 rounded-xl bg-amber-950/80 border border-amber-700/60 flex items-center justify-center text-amber-400 text-lg shrink-0";
+      }
+    }
+  } catch (err) {
+    console.warn("硬件状态检测失败:", err);
+  }
+}
+
 async function checkTTSServiceStatus() {
+  checkHardwareStatus();
   const badge = document.getElementById("tts-service-status-badge");
   if (!badge) return;
   try {
@@ -2448,37 +2494,29 @@ const TASK_ROLES = {
     key: "replyer",
     name: "replyer 回复",
     desc: "负责生成最终与用户或群聊沟通的回复内容，具备完整角色神态与情感共鸣。",
-    badge: "主要角色",
+    badge: "主要对话",
     icon: "fa-comment-dots",
     typeFilter: ["llm", "vlm"],
   },
   planner: {
     key: "planner",
-    name: "planner 规划/决策",
-    desc: "负责群聊上下文研判、智能评估是否主动插话发言与聊天节奏把控。",
-    badge: "决策中枢",
+    name: "planner 决策与工具",
+    desc: "负责群聊主动回复研判、上下文决策评估与技能工具调用，保障逻辑思考与辅助处理。",
+    badge: "决策与工具",
     icon: "fa-brain",
-    typeFilter: ["llm"],
-  },
-  utils: {
-    key: "utils",
-    name: "utils 工具",
-    desc: "负责技能调用、函数计算与辅助逻辑处理，优先调用结构化能力强的模型。",
-    badge: "辅助工具",
-    icon: "fa-toolbox",
     typeFilter: ["llm"],
   },
   vlm: {
     key: "vlm",
-    name: "vlm 视觉",
-    desc: "负责群聊图片识别与视觉多模态理解，提供图片场景与角色细节分析。",
-    badge: "多模态",
+    name: "vlm 视觉转述",
+    desc: "仅在主对话模型不支持多模态时触发，对接收到的图片进行视觉解析与画面转述描述。",
+    badge: "视觉转述",
     icon: "fa-eye",
     typeFilter: ["vlm", "llm"],
   },
   embedding: {
     key: "embedding",
-    name: "embedding 嵌入式",
+    name: "embedding 向量嵌入",
     desc: "负责长期记忆库的语义向量化与快速检索召回，保障角色深层设定的精准匹配。",
     badge: "记忆核心",
     icon: "fa-bezier-curve",
@@ -2735,9 +2773,151 @@ function renderModelsTable() {
     .join("");
 }
 
+let currentRoleModels = [];
+
 window.selectAssignmentRole = function (roleKey) {
   currentAssignmentRole = roleKey;
+  const cfg = currentAssignments?.[roleKey] || {};
+  if (Array.isArray(cfg.models) && cfg.models.length > 0) {
+    currentRoleModels = [...cfg.models];
+  } else if (cfg.model_id) {
+    currentRoleModels = [cfg.model_id];
+  } else {
+    currentRoleModels = [];
+  }
   renderAssignmentsView();
+};
+
+function updateStrategyHintText(strat) {
+  const hintEl = document.getElementById("role-strategy-hint-text");
+  if (!hintEl) return;
+  if (strat === "fallback") {
+    hintEl.textContent = "故障备用模式：按列表中模型从上到下依次尝试。若主模型发生错误或超限，将自动无缝降级到下一个备选模型重试。";
+  } else if (strat === "random") {
+    hintEl.textContent = "随机轮询模式：每次调用在上述列表的模型之间均匀随机调度，实现多模型间的请求分流与负载均衡。";
+  } else {
+    hintEl.textContent = "固定首选模式：仅使用列表中排在第 1 位的首选主模型，其余模型归档备用。";
+  }
+}
+
+function renderRoleModelsList(strat) {
+  const container = document.getElementById("role-models-list");
+  if (!container) return;
+  if (currentRoleModels.length === 0) {
+    container.innerHTML = `<div class="text-[11px] text-slate-500 py-3 text-center">暂未添加模型，请从下方选择模型后点击「加入列表」</div>`;
+    return;
+  }
+
+  let html = "";
+  currentRoleModels.forEach((mTag, idx) => {
+    const item = currentHubItems.find((x) => x.id === mTag);
+    const dispName = item?.display_name || item?.model_name || mTag;
+    const isVision = item?.supports_vision || item?.model_type === "vlm";
+
+    let badgeText = "";
+    let badgeClass = "";
+    if (strat === "random") {
+      badgeText = `轮询 ${idx + 1}`;
+      badgeClass = "bg-purple-950/80 text-purple-300 border-purple-800/60";
+    } else if (strat === "fallback") {
+      if (idx === 0) {
+        badgeText = "主模型";
+        badgeClass = "bg-cyan-950/80 text-cyan-300 border-cyan-800/60";
+      } else {
+        badgeText = `备用 ${idx}`;
+        badgeClass = "bg-amber-950/80 text-amber-300 border-amber-800/60";
+      }
+    } else {
+      if (idx === 0) {
+        badgeText = "首选主模型";
+        badgeClass = "bg-cyan-950/80 text-cyan-300 border-cyan-800/60";
+      } else {
+        badgeText = `次选 ${idx}`;
+        badgeClass = "bg-slate-800 text-slate-400 border-slate-700";
+      }
+    }
+
+    html += `
+      <div class="flex items-center justify-between p-2 rounded-lg bg-slate-900/90 border border-slate-800 hover:border-slate-700 transition">
+        <div class="flex items-center gap-2 min-w-0">
+          <span class="px-2 py-0.5 rounded text-[10px] font-bold border ${badgeClass} shrink-0">${badgeText}</span>
+          <div class="min-w-0">
+            <div class="text-xs font-semibold text-slate-200 truncate flex items-center gap-1.5">
+              <span>${escapeHtml(dispName)}</span>
+              ${isVision ? '<span title="支持视觉多模态" class="text-[10px] text-cyan-400"><i class="fa-solid fa-eye"></i></span>' : ''}
+            </div>
+            <div class="text-[10px] font-mono text-slate-400 truncate">${escapeHtml(mTag)}</div>
+          </div>
+        </div>
+        <div class="flex items-center gap-1 shrink-0 ml-2">
+          <button type="button" onclick="moveRoleModelUp(${idx})" ${idx === 0 ? "disabled" : ""} class="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none text-xs" title="上移">
+            <i class="fa-solid fa-arrow-up"></i>
+          </button>
+          <button type="button" onclick="moveRoleModelDown(${idx})" ${idx === currentRoleModels.length - 1 ? "disabled" : ""} class="p-1 rounded text-slate-400 hover:text-slate-200 disabled:opacity-30 disabled:pointer-events-none text-xs" title="下移">
+            <i class="fa-solid fa-arrow-down"></i>
+          </button>
+          <button type="button" onclick="removeRoleModel(${idx})" class="p-1 rounded text-rose-400 hover:text-rose-300 text-xs ml-1" title="移除">
+            <i class="fa-solid fa-trash-can"></i>
+          </button>
+        </div>
+      </div>
+    `;
+  });
+  container.innerHTML = html;
+}
+
+function populateRoleAddModelSelect() {
+  const addSel = document.getElementById("role-add-model-select");
+  if (!addSel) return;
+  let candidateModels = currentHubItems;
+  if (currentAssignmentRole === "vlm") {
+    candidateModels = currentHubItems.filter((m) => m.supports_vision || m.model_type === "vlm");
+  } else {
+    candidateModels = currentHubItems.filter((m) => (m.model_type || "llm") !== "embedding");
+  }
+  if (candidateModels.length === 0) candidateModels = currentHubItems;
+
+  addSel.innerHTML = candidateModels
+    .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.display_name || m.model_name)} (${escapeHtml(m.id)})</option>`)
+    .join("");
+}
+
+window.moveRoleModelUp = function(idx) {
+  if (idx <= 0 || idx >= currentRoleModels.length) return;
+  const temp = currentRoleModels[idx - 1];
+  currentRoleModels[idx - 1] = currentRoleModels[idx];
+  currentRoleModels[idx] = temp;
+  const strat = document.getElementById("role-strategy-select")?.value || "fixed";
+  renderRoleModelsList(strat);
+};
+
+window.moveRoleModelDown = function(idx) {
+  if (idx < 0 || idx >= currentRoleModels.length - 1) return;
+  const temp = currentRoleModels[idx + 1];
+  currentRoleModels[idx + 1] = currentRoleModels[idx];
+  currentRoleModels[idx] = temp;
+  const strat = document.getElementById("role-strategy-select")?.value || "fixed";
+  renderRoleModelsList(strat);
+};
+
+window.removeRoleModel = function(idx) {
+  if (idx < 0 || idx >= currentRoleModels.length) return;
+  currentRoleModels.splice(idx, 1);
+  const strat = document.getElementById("role-strategy-select")?.value || "fixed";
+  renderRoleModelsList(strat);
+};
+
+window.addRoleModelFromSelect = function() {
+  const addSel = document.getElementById("role-add-model-select");
+  const selectedTag = addSel?.value;
+  if (!selectedTag) return;
+  if (currentRoleModels.includes(selectedTag)) {
+    showToast(`模型「${selectedTag}」已在调度列表中！`);
+    return;
+  }
+  currentRoleModels.push(selectedTag);
+  const strat = document.getElementById("role-strategy-select")?.value || "fixed";
+  renderRoleModelsList(strat);
 };
 
 function renderAssignmentsView() {
@@ -2747,9 +2927,12 @@ function renderAssignmentsView() {
   let html = "";
   Object.values(TASK_ROLES).forEach((role) => {
     const isSelected = currentAssignmentRole === role.key;
-    const currentModelId = currentAssignments?.[role.key]?.model_id || "未指定";
-    const item = currentHubItems.find((x) => x.id === currentModelId);
-    const dispName = item?.display_name || item?.model_name || currentModelId;
+    const cfg = currentAssignments?.[role.key] || {};
+    const models = Array.isArray(cfg.models) && cfg.models.length > 0 ? cfg.models : (cfg.model_id ? [cfg.model_id] : []);
+    const firstModel = models[0] || "未指定";
+    const item = currentHubItems.find((x) => x.id === firstModel);
+    const dispName = item?.display_name || item?.model_name || firstModel;
+    const countInfo = models.length > 1 ? ` (+${models.length - 1})` : "";
 
     html += `
       <button onclick="selectAssignmentRole('${role.key}')" class="w-full text-left p-2.5 rounded-xl text-xs transition border flex flex-col gap-1 ${
@@ -2765,7 +2948,7 @@ function renderAssignmentsView() {
           <span class="text-[10px] px-1.5 py-0.2 rounded bg-slate-900 text-slate-400 border border-slate-800">${role.badge}</span>
         </div>
         <div class="text-[11px] font-mono text-slate-400 truncate pl-4">
-          ${escapeHtml(dispName)}
+          ${escapeHtml(dispName)}${countInfo}
         </div>
       </button>
     `;
@@ -2784,35 +2967,27 @@ function renderAssignmentsView() {
   if (descEl) descEl.textContent = currentRoleInfo.desc;
   if (badgeEl) badgeEl.textContent = currentRoleInfo.badge;
 
-  const sel = document.getElementById("role-model-select");
-  if (sel) {
-    let candidateModels = currentHubItems;
-    if (currentAssignmentRole === "embedding") {
-      candidateModels = currentHubItems.filter((m) => (m.model_type || "llm") === "embedding");
-    } else if (currentAssignmentRole === "vlm") {
-      candidateModels = currentHubItems.filter((m) => m.supports_vision || m.model_type === "vlm");
-    } else {
-      candidateModels = currentHubItems.filter((m) => (m.model_type || "llm") !== "embedding");
-    }
-
-    if (candidateModels.length === 0) {
-      candidateModels = currentHubItems;
-    }
-
-    sel.innerHTML = candidateModels
-      .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.display_name || m.model_name)} (${escapeHtml(m.id)})</option>`)
-      .join("");
-
-    sel.value = currentCfg.model_id || candidateModels[0]?.id || "";
-  }
-
   const isEmbed = currentAssignmentRole === "embedding";
+  const multiModelsBlock = document.getElementById("role-multi-models-block");
+  const singleModelBlock = document.getElementById("role-single-model-block");
   const llmBlock = document.getElementById("role-llm-params-block");
   const embedBlock = document.getElementById("role-embedding-params-block");
 
   if (isEmbed) {
+    if (multiModelsBlock) multiModelsBlock.classList.add("hidden");
+    if (singleModelBlock) singleModelBlock.classList.remove("hidden");
     if (llmBlock) llmBlock.classList.add("hidden");
     if (embedBlock) embedBlock.classList.remove("hidden");
+
+    const sel = document.getElementById("role-model-select");
+    if (sel) {
+      let candidateModels = currentHubItems.filter((m) => (m.model_type || "llm") === "embedding");
+      if (candidateModels.length === 0) candidateModels = currentHubItems;
+      sel.innerHTML = candidateModels
+        .map((m) => `<option value="${escapeHtml(m.id)}">${escapeHtml(m.display_name || m.model_name)} (${escapeHtml(m.id)})</option>`)
+        .join("");
+      sel.value = currentCfg.model_id || candidateModels[0]?.id || "";
+    }
 
     const dimInput = document.getElementById("role-embed-dim-input");
     const statusDesc = document.getElementById("role-embed-status-desc");
@@ -2821,10 +2996,12 @@ function renderAssignmentsView() {
       const isBuiltin = (currentCfg.model_id || "").includes("builtin") || (currentCfg.model_id || "").includes("bge-small-zh-v1.5");
       statusDesc.textContent = isBuiltin
         ? "内置离线模型 (bge-small-zh-v1.5, 512维) 零网络依赖、极速稳定"
-        : `自定义远程模型 (${escapeHtml(currentCfg.model_id || "未指定")})，已启用动态维度支持`;
+        : `自定义远程模型 (${escapeHtml(currentCfg.model_id || "未指定")})，切换模型时将自动探测维度`;
       statusDesc.className = isBuiltin ? "text-[11px] text-emerald-400 py-1.5" : "text-[11px] text-cyan-300 py-1.5";
     }
   } else {
+    if (multiModelsBlock) multiModelsBlock.classList.remove("hidden");
+    if (singleModelBlock) singleModelBlock.classList.add("hidden");
     if (llmBlock) llmBlock.classList.remove("hidden");
     if (embedBlock) embedBlock.classList.add("hidden");
 
@@ -2833,12 +3010,17 @@ function renderAssignmentsView() {
     const tempInp = document.getElementById("role-temp-input");
     const tempVal = document.getElementById("role-temp-val");
 
-    if (stratSel) stratSel.value = currentCfg.strategy || "fixed";
+    const currentStrategy = currentCfg.strategy || "fixed";
+    if (stratSel) stratSel.value = currentStrategy;
     if (maxTokInp) maxTokInp.value = currentCfg.max_tokens !== undefined ? currentCfg.max_tokens : 1200;
     if (tempInp) {
       tempInp.value = currentCfg.temperature !== undefined ? currentCfg.temperature : 0.7;
       if (tempVal) tempVal.textContent = tempInp.value;
     }
+
+    updateStrategyHintText(currentStrategy);
+    renderRoleModelsList(currentStrategy);
+    populateRoleAddModelSelect();
   }
 }
 
@@ -3021,6 +3203,110 @@ function initMultiProviderAndHub() {
     detectDimensionForModal();
   });
 
+  let isManualModelInput = false;
+
+  window.toggleManualModelInput = function (forceManual = null) {
+    isManualModelInput = forceManual !== null ? forceManual : !isManualModelInput;
+    const selWrap = document.getElementById("hub-model-select-wrapper");
+    const manWrap = document.getElementById("hub-model-manual-wrapper");
+    const labelEl = document.getElementById("btn-toggle-manual-label");
+
+    if (isManualModelInput) {
+      if (selWrap) selWrap.classList.add("hidden");
+      if (manWrap) manWrap.classList.remove("hidden");
+      if (labelEl) labelEl.textContent = "列表点选";
+    } else {
+      if (selWrap) selWrap.classList.remove("hidden");
+      if (manWrap) manWrap.classList.add("hidden");
+      if (labelEl) labelEl.textContent = "手动输入";
+    }
+  };
+
+  document.getElementById("btn-toggle-manual-model")?.addEventListener("click", () => {
+    window.toggleManualModelInput();
+  });
+
+  window.fetchModelsForHubModal = async function (providerId) {
+    const selectEl = document.getElementById("hub-model-select");
+    const loadingEl = document.getElementById("hub-model-select-loading");
+    if (!selectEl) return;
+
+    if (providerId === "builtin") {
+      selectEl.innerHTML = `<option value="bge-small-zh-v1.5">bge-small-zh-v1.5 (内置离线向量模型, 512维)</option>`;
+      window.onHubModelSelected("bge-small-zh-v1.5");
+      return;
+    }
+
+    if (loadingEl) loadingEl.classList.remove("hidden");
+    try {
+      const res = await fetch(`/api/llm/providers/${encodeURIComponent(providerId)}/fetch_models`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || "拉取失败");
+      const models = data.models || data || [];
+      if (Array.isArray(models) && models.length > 0) {
+        selectEl.innerHTML = `<option value="">-- 请点选上游模型 (${models.length}个可用) --</option>` +
+          models.map((m) => `<option value="${escapeHtml(m)}">${escapeHtml(m)}</option>`).join("");
+        if (loadingEl) loadingEl.classList.add("hidden");
+        const curInputVal = document.getElementById("hub-model-name-input")?.value;
+        if (curInputVal && models.includes(curInputVal)) {
+          selectEl.value = curInputVal;
+        }
+      } else {
+        selectEl.innerHTML = `<option value="">-- 未拉取到模型列表，可切换手动输入 --</option>`;
+        if (loadingEl) loadingEl.classList.add("hidden");
+      }
+    } catch (err) {
+      console.warn("拉取模型列表失败:", err);
+      if (loadingEl) loadingEl.classList.add("hidden");
+      selectEl.innerHTML = `<option value="">-- 拉取超时/异常 (${escapeHtml(err.message)})，可切换手动输入 --</option>`;
+    }
+  };
+
+  window.onHubModelSelected = function (modelName) {
+    if (!modelName) return;
+    const nameInput = document.getElementById("hub-model-name-input");
+    if (nameInput) nameInput.value = modelName;
+
+    const provSelect = document.getElementById("hub-provider-select");
+    const provText = provSelect?.options[provSelect.selectedIndex]?.text || "Provider";
+    const provName = provText.split(" (")[0].trim();
+    const tagInput = document.getElementById("hub-tag-input");
+    if (tagInput) tagInput.value = `${provName}/${modelName}`;
+
+    const dispInput = document.getElementById("hub-display-name-input");
+    if (dispInput && (!dispInput.value || dispInput.value === nameInput.defaultValue)) {
+      const cleanName = modelName.split("/").pop();
+      dispInput.value = cleanName;
+    }
+
+    const lower = modelName.toLowerCase();
+    const typeSel = document.getElementById("hub-model-type-select");
+    const dimBox = document.getElementById("hub-dimension-container");
+    const visionBox = document.getElementById("hub-support-vision");
+
+    if (lower.includes("embed") || lower.includes("bge")) {
+      if (typeSel) typeSel.value = "embedding";
+      if (dimBox) dimBox.classList.remove("hidden");
+      detectDimensionForModal();
+    } else if (lower.includes("vision") || lower.includes("-vl") || lower.includes("4o") || lower.includes("flash") || lower.includes("omni")) {
+      if (typeSel) typeSel.value = "vlm";
+      if (dimBox) dimBox.classList.add("hidden");
+      if (visionBox) visionBox.checked = true;
+    } else {
+      if (typeSel) typeSel.value = "llm";
+      if (dimBox) dimBox.classList.add("hidden");
+    }
+  };
+
+  document.getElementById("hub-model-select")?.addEventListener("change", (e) => {
+    window.onHubModelSelected(e.target.value);
+  });
+
+  document.getElementById("btn-fetch-hub-models")?.addEventListener("click", () => {
+    const provId = document.getElementById("hub-provider-select")?.value;
+    if (provId) window.fetchModelsForHubModal(provId);
+  });
+
   const updateTagPreview = () => {
     const provSelect = document.getElementById("hub-provider-select");
     const provText = provSelect.options[provSelect.selectedIndex]?.text || "Provider";
@@ -3030,7 +3316,10 @@ function initMultiProviderAndHub() {
       document.getElementById("hub-tag-input").value = `${provName}/${modelName}`;
     }
   };
-  document.getElementById("hub-provider-select")?.addEventListener("change", updateTagPreview);
+  document.getElementById("hub-provider-select")?.addEventListener("change", (e) => {
+    updateTagPreview();
+    window.fetchModelsForHubModal(e.target.value);
+  });
   document.getElementById("hub-model-name-input")?.addEventListener("input", updateTagPreview);
 
   document.getElementById("form-hub-item")?.addEventListener("submit", async (e) => {
@@ -3093,48 +3382,106 @@ function initMultiProviderAndHub() {
     if (valEl) valEl.textContent = e.target.value;
   });
 
-  document.getElementById("btn-detect-embed-dim")?.addEventListener("click", async () => {
+  document.getElementById("btn-add-model-to-role")?.addEventListener("click", () => {
+    window.addRoleModelFromSelect();
+  });
+
+  document.getElementById("role-strategy-select")?.addEventListener("change", (e) => {
+    updateStrategyHintText(e.target.value);
+    renderRoleModelsList(e.target.value);
+  });
+
+  // 切换向量模型自动触发向量测探并自动填写
+  window.autoDetectDimensionForRole = async function () {
     const sel = document.getElementById("role-model-select");
     const modelTag = sel?.value;
+    if (!modelTag) return;
     const mItem = currentHubItems.find((x) => x.id === modelTag);
-    if (!mItem) {
-      await showAlertDialog("请先选择要探测维度的嵌入模型！", "提示");
+    const statusDesc = document.getElementById("role-embed-status-desc");
+    const dimInp = document.getElementById("role-embed-dim-input");
+
+    if (!mItem || mItem.provider_id === "builtin" || (mItem.model_name || "").includes("bge-small-zh-v1.5")) {
+      if (dimInp) dimInp.value = 512;
+      if (statusDesc) {
+        statusDesc.textContent = "内置离线模型 (bge-small-zh-v1.5, 512维) 零网络依赖、极速稳定";
+        statusDesc.className = "text-[11px] text-emerald-400 py-1.5";
+      }
       return;
     }
+
+    if (statusDesc) {
+      statusDesc.textContent = `正在自动探测「${mItem.model_name}」输出维度...`;
+      statusDesc.className = "text-[11px] text-amber-400 py-1.5";
+    }
     try {
-      showToast(`正在探测「${mItem.model_name}」维度...`);
       const res = await fetch("/api/llm/detect_dimension", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider_id: mItem.provider_id, model_name: mItem.model_name }),
+        body: JSON.stringify({ tag: modelTag, provider_id: mItem.provider_id, model_name: mItem.model_name }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "探测失败");
-      const dimInp = document.getElementById("role-embed-dim-input");
-      if (dimInp) dimInp.value = data.dimension;
-      showToast(data.message);
-    } catch (e) {
-      await showAlertDialog(`维度探测失败: ${e.message}`, "探测异常");
+      if (res.ok && data.dimension) {
+        if (dimInp) dimInp.value = data.dimension;
+        if (statusDesc) {
+          statusDesc.textContent = `自定义远程模型 (${escapeHtml(mItem.model_name)})，已自动探测确认输出维度为 ${data.dimension} 维`;
+          statusDesc.className = "text-[11px] text-cyan-300 py-1.5";
+        }
+        showToast(`已自动探测到向量维度: ${data.dimension} 维并回填！`);
+      }
+    } catch (err) {
+      console.warn("自动探测维度失败:", err);
+      if (statusDesc) {
+        statusDesc.textContent = `自动探测超时，请手动确认维度或点击右侧探测按钮`;
+        statusDesc.className = "text-[11px] text-rose-400 py-1.5";
+      }
     }
+  };
+
+  document.getElementById("role-model-select")?.addEventListener("change", async () => {
+    if (currentAssignmentRole === "embedding") {
+      await window.autoDetectDimensionForRole();
+    }
+  });
+
+  document.getElementById("btn-detect-embed-dim")?.addEventListener("click", async () => {
+    await window.autoDetectDimensionForRole();
   });
 
   document.getElementById("btn-save-role-assignment")?.addEventListener("click", async () => {
     const roleKey = currentAssignmentRole;
-    const sel = document.getElementById("role-model-select");
-    const model_id = sel?.value || "";
-
     const payload = {};
+
     if (roleKey === "embedding") {
+      const sel = document.getElementById("role-model-select");
+      const model_id = sel?.value || "";
       const dimension = parseInt(document.getElementById("role-embed-dim-input")?.value, 10) || 512;
       payload.embedding = { model_id, strategy: "fixed", dimension };
     } else {
+      if (currentRoleModels.length === 0) {
+        await showAlertDialog("请至少为当前任务添加一个执行模型！", "提示");
+        return;
+      }
       const strategy = document.getElementById("role-strategy-select")?.value || "fixed";
       const max_tokens = parseInt(document.getElementById("role-max-tokens-input")?.value, 10) || 1200;
       const temperature = parseFloat(document.getElementById("role-temp-input")?.value) || 0.7;
-      payload[roleKey] = { model_id, strategy, max_tokens, temperature };
+
+      const assignmentData = {
+        model_id: currentRoleModels[0] || "",
+        models: currentRoleModels,
+        strategy,
+        max_tokens,
+        temperature,
+      };
+
+      payload[roleKey] = assignmentData;
+      // 决策与工具合并：保存 planner 时同步保存 utils
+      if (roleKey === "planner") {
+        payload.utils = { ...assignmentData };
+      }
     }
 
     try {
+      showToast("正在保存功能分配...");
       const res = await fetch("/api/llm/assignments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -3251,6 +3598,12 @@ function openHubItemModal(item = null) {
 
   const typeSel = document.getElementById("hub-model-type-select");
   const dimBox = document.getElementById("hub-dimension-container");
+
+  const targetProvId = item ? item.provider_id : (provSelect.value || currentProviders[0]?.id || "");
+  if (targetProvId) {
+    window.fetchModelsForHubModal(targetProvId);
+  }
+  window.toggleManualModelInput(item ? true : false);
 
   if (item) {
     provSelect.value = item.provider_id || (currentProviders[0]?.id || "");
